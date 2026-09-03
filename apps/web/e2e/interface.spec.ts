@@ -12,6 +12,41 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+  await page.route("**/api/github/repos", async (route) => {
+    if (!route.request().url().endsWith("/api/github/repos")) return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        repositories: [
+          {
+            id: 1,
+            name: "hello-world",
+            fullName: "octocat/hello-world",
+            private: false,
+            htmlUrl: "https://github.com/octocat/hello-world",
+            cloneUrl: "https://github.com/octocat/hello-world.git",
+            defaultBranch: "main",
+            pushedAt: null,
+            permissions: { admin: false, maintain: false, push: true, triage: false, pull: true },
+          },
+        ],
+      }),
+    });
+  });
+  await page.route("**/api/github/repos/clone", async (route) => {
+    if (!route.request().url().endsWith("/api/github/repos/clone")) return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        clone: {
+          fullName: "octocat/hello-world",
+          branch: "main",
+          directory: "/vercel/sandbox/repos/octocat__hello-world",
+          alreadyPresent: false,
+        },
+      }),
+    });
+  });
   await page.route("**/api/sandbox/environment", async (route) => {
     await route.fulfill({
       contentType: "application/json",

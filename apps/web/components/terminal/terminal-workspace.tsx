@@ -9,6 +9,7 @@ import type { TerminalTransport } from "@/lib/terminal/transport";
 import { VercelTerminalTransport } from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
+import { RepositoryPicker } from "./repository-picker";
 import { SandboxControls } from "./sandbox-controls";
 import { XtermPane } from "./xterm-pane";
 
@@ -229,6 +230,7 @@ export function TerminalWorkspace() {
   return (
     <main className={styles.page}>
       <section className={styles.workspace} aria-label="Cloud terminal workspace">
+        <RepositoryPicker />
         <div className={styles.tabRow} role="tablist" aria-label="Open terminals" aria-orientation="horizontal">
           <div className={styles.tabs}>
             {tabs.map((tab) => (
