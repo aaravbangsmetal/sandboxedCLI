@@ -1,32 +1,45 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const config = vi.hoisted(() => ({
-  assertGitHubOAuthConfigured: vi.fn(),
+const auth = vi.hoisted(() => ({ signInWithOAuth: vi.fn() }));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: vi.fn(async () => ({ auth })),
 }));
-
-const session = vi.hoisted(() => ({
-  createOAuthState: vi.fn(() => "state-token"),
-  setOAuthStateCookie: vi.fn(),
-}));
-
-const github = vi.hoisted(() => ({
-  githubAuthorizeUrl: vi.fn((state: string) => `https://github.com/login/oauth/authorize?state=${state}`),
-}));
-
-vi.mock("@/lib/auth/config", () => config);
-vi.mock("@/lib/auth/session", () => session);
-vi.mock("@/lib/github/client", () => github);
 
 import { GET } from "./route";
 
 describe("GET /api/auth/github", () => {
-  it("sets an OAuth state cookie and redirects to GitHub", async () => {
-    const response = await GET();
+  beforeEach(() => vi.clearAllMocks());
+
+  it("redirects directly into Supabase GitHub OAuth", async () => {
+    auth.signInWithOAuth.mockResolvedValue({
+      data: { url: "https://project.supabase.co/auth/v1/authorize?provider=github" },
+      error: null,
+    });
+
+    const response = await GET(new Request("https://sandboxedcli.xyz/api/auth/github"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "https://github.com/login/oauth/authorize?state=state-token",
+      "https://project.supabase.co/auth/v1/authorize?provider=github",
     );
-    expect(session.setOAuthStateCookie).toHaveBeenCalledWith("state-token");
+    expect(auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "github",
+      options: {
+        redirectTo: "https://sandboxedcli.xyz/api/auth/github/callback",
+        scopes: "read:user user:email repo",
+      },
+    });
+  });
+
+  it("returns a service error when Supabase OAuth is unavailable", async () => {
+    auth.signInWithOAuth.mockResolvedValue({
+      data: { url: null },
+      error: new Error("OAuth unavailable"),
+    });
+
+    const response = await GET(new Request("https://sandboxedcli.xyz/api/auth/github"));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ code: "github_oauth_unavailable" });
   });
 });
