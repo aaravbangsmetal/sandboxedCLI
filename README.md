@@ -2,16 +2,19 @@
 
 A browser terminal backed by a real [Vercel Sandbox](https://vercel.com/docs/sandbox). Supabase Auth owns persistent GitHub login and user history, while the backend uses the granted GitHub access to clone repositories, review changes, push branches, and create pull requests from the sandbox.
 
-## What is real on `backend`
+## What is real
 
 - GitHub OAuth runs through Supabase Auth using its cookie-based PKCE session; browser code never receives the GitHub access token.
 - Supabase records each user, account creation time, and last sign-in time in `auth.users`.
 - Because Supabase intentionally does not retain provider tokens, the callback encrypts the GitHub token and stores it in a service-role-only `github_connections` row keyed by the Supabase user ID.
-- Authenticated users can list repositories available to the granted OAuth scope.
+- Authenticated users can list repositories available to the granted OAuth scope across multiple GitHub API pages.
 - Selected repositories are cloned inside the persistent sandbox with a transient GitHub token passed only to the server-side sandbox command environment.
-- A named persistent sandbox is created or resumed for each signed workspace.
+- A stable named persistent sandbox is derived from the verified Supabase user, so a returning user reaches the same VM filesystem across browser sessions and devices.
 - xterm connects directly to Vercel's interactive shell controller with a just-in-time WebSocket token.
 - Each browser tab maps to a stable `tmux` session while the VM is running.
+- Terminal tmux sessions receive GitHub credentials server-side. `git fetch`, `git pull`, `git push`, and `gh` work without exposing the token in the browser connection payload or writing it to snapshots.
+- Selecting a repository fetches an existing clone when present, marks it active, and opens a fresh terminal rooted in that repository.
+- Codex, Claude Code, and OpenCode keep their on-disk authentication/configuration under the snapshotted workspace state directory.
 - Tab identities survive reloads in local storage and reconnect to their `tmux` sessions.
 - The UI can query status, extend the active lease, pause/snapshot, resume, terminate one terminal, or permanently destroy the sandbox and its orphan snapshots.
 - The delivery panel reads git status/diff, commits changed files on a generated sandbox branch, pushes it to GitHub, and opens a pull request against the cloned repository's default branch.
@@ -56,7 +59,7 @@ The default image on `envs` is `sandboxed-cli-agent:dev`. Build it from [`enviro
 
 ## Lifecycle API
 
-All mutation routes require same-origin `application/json` requests. The browser never supplies a sandbox name; the server derives one from an HMAC-signed HttpOnly workspace cookie.
+All sandbox routes require a verified Supabase/GitHub session, and mutation routes additionally require same-origin `application/json` requests. The browser never supplies a sandbox name; the server derives one from the Supabase user ID with an HMAC secret.
 
 - `GET /api/sandbox` — status only; never wakes a stopped sandbox.
 - `POST /api/sandbox` — create or resume.
@@ -67,6 +70,8 @@ All mutation routes require same-origin `application/json` requests. The browser
 - `DELETE /api/sandbox` with `{ "confirm": "destroy" }` — permanently delete the sandbox and orphan snapshots.
 
 Interactive controller tokens are returned with `Cache-Control: no-store`, used in memory, and never persisted or logged. Provider credentials remain server-only.
+
+The GitHub provider token is injected only into the server-created tmux process environment. The browser receives an attach-only tmux command, so the terminal can use Git and GitHub CLI without placing the token in the WebSocket startup frame or sandbox filesystem.
 
 ## GitHub API
 
