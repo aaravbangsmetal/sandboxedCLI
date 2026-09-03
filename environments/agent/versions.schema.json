@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sandboxedcli.xyz/schemas/environment-versions.json",
+  "title": "sandboxed/cli environment version lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseImage", "platform", "ubuntuSnapshot", "node", "githubCli", "npmPackages"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "baseImage": {
+      "type": "string",
+      "pattern": "^[^@]+@sha256:[a-f0-9]{64}$"
+    },
+    "platform": { "const": "linux/amd64" },
+    "ubuntuSnapshot": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+    "node": { "$ref": "#/$defs/checksummedTool" },
+    "githubCli": { "$ref": "#/$defs/checksummedTool" },
+    "npmPackages": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/npmPackage" }
+    }
+  },
+  "$defs": {
+    "checksummedTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "npmPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "integrity"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "integrity": { "type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$" }
+      }
+    }
+  }
+}

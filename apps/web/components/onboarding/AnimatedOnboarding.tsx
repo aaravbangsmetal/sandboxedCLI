@@ -15,6 +15,13 @@ type AnimatedOnboardingProps = Readonly<{
   prepareSandbox?: boolean;
 }>;
 
+type EnvironmentResponse = Readonly<{
+  environment?: {
+    status?: "ok" | "degraded" | "fail";
+  };
+  error?: string;
+}>;
+
 export function AnimatedOnboarding({
   lines,
   completionMessage,
@@ -25,7 +32,7 @@ export function AnimatedOnboarding({
   const router = useRouter();
   const started = useRef(false);
   const navigationTimer = useRef<number | null>(null);
-  const [setupState, setSetupState] = useState<"idle" | "preparing" | "ready" | "error">("idle");
+  const [setupState, setSetupState] = useState<"idle" | "preparing" | "checking" | "ready" | "degraded" | "error">("idle");
   const [setupError, setSetupError] = useState("");
 
   const prepare = useCallback(async () => {
@@ -41,7 +48,21 @@ export function AnimatedOnboarding({
       });
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(body?.error || `Sandbox startup failed (${response.status}).`);
-      setSetupState("ready");
+      setSetupState("checking");
+      const environmentResponse = await fetch("/api/sandbox/environment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const environmentBody = (await environmentResponse.json().catch(() => null)) as
+        | EnvironmentResponse
+        | null;
+      if (!environmentResponse.ok) {
+        throw new Error(
+          environmentBody?.error || `Sandbox environment check failed (${environmentResponse.status}).`,
+        );
+      }
+      setSetupState(environmentBody?.environment?.status === "ok" ? "ready" : "degraded");
       navigationTimer.current = window.setTimeout(() => router.replace(destination), 900);
     } catch (error) {
       started.current = false;
@@ -77,7 +98,11 @@ export function AnimatedOnboarding({
         {prepareSandbox && setupState !== "idle" ? (
           <p className={styles.sequenceLine} role="status" aria-live="polite">
             {setupState === "preparing" ? <><span className={styles.cursor} /> connecting to Vercel Sandbox</> : null}
+            {setupState === "checking" ? <><span className={styles.cursor} /> verifying agent environment</> : null}
             {setupState === "ready" ? <span className={styles.accent}>&gt;_sandbox_init!</span> : null}
+            {setupState === "degraded" ? (
+              <span className={styles.accent}>&gt;_sandbox_init; env_health_degraded</span>
+            ) : null}
             {setupState === "error" ? (
               <>
                 <span className={styles.muted}>&gt;_{setupError}</span>{" "}

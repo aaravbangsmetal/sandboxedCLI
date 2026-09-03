@@ -10,7 +10,7 @@ function boundedInteger(value: string | undefined, fallback: number, min: number
 }
 
 export const sandboxConfig = {
-  image: process.env.SANDBOX_IMAGE || "vercel/sandbox/universal:latest",
+  image: process.env.SANDBOX_IMAGE || "sandboxed-cli-agent:dev",
   timeoutMs: boundedInteger(process.env.SANDBOX_SESSION_TIMEOUT_MS, 15 * MINUTE, MINUTE, DAY),
   vcpus: boundedInteger(process.env.SANDBOX_VCPUS, 2, 1, 32),
   snapshotExpirationMs: boundedInteger(

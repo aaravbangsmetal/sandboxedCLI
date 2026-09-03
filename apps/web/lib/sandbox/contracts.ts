@@ -57,10 +57,25 @@ export interface PauseResult {
   snapshotId?: string;
 }
 
+export interface SandboxEnvironmentCheck {
+  name: string;
+  status: "ok" | "fail";
+  detail: string;
+}
+
+export interface SandboxEnvironmentReport {
+  status: "ok" | "degraded" | "fail";
+  workspace: string;
+  stateDirectory: string;
+  image: string;
+  checks: SandboxEnvironmentCheck[];
+}
+
 export interface SandboxRuntime {
   isConfigured(): boolean;
   getStatus(name: string): Promise<SandboxStatus>;
   ensureRunning(name: string): Promise<SandboxStatus>;
+  checkEnvironment(name: string): Promise<SandboxEnvironmentReport>;
   openTerminal(
     name: string,
     terminalId: string,
