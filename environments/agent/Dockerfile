@@ -7,6 +7,8 @@ ARG UBUNTU_SNAPSHOT=20260831T000000Z
 ARG NODE_VERSION=24.20.0
 ARG NODE_SHA256=2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2
 ARG PNPM_VERSION=11.25.0
+ARG GH_VERSION=2.99.0
+ARG GH_SHA256=ed4960225d2833e04a61590d9fa2b5773d147f3aa375459e5466a40c102f3832
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -83,6 +85,15 @@ RUN curl --fail --silent --show-error --location \
 RUN npm install --global --no-audit --no-fund "pnpm@${PNPM_VERSION}" \
     && test "$(pnpm --version)" = "${PNPM_VERSION}" \
     && npm cache clean --force
+
+RUN curl --fail --silent --show-error --location \
+      "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+      --output /tmp/gh.tar.gz \
+    && printf '%s  %s\n' "${GH_SHA256}" /tmp/gh.tar.gz | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/gh.tar.gz --directory /tmp \
+    && install -m 0755 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh \
+    && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_amd64" \
+    && test "$(gh --version | awk 'NR == 1 { print $3 }')" = "${GH_VERSION}"
 
 WORKDIR /vercel/sandbox
 USER vercel-sandbox
