@@ -112,10 +112,12 @@ RUN npm install --global --include=optional --no-audit --no-fund "opencode-ai@${
     && opencode --version | grep --fixed-strings "${OPENCODE_VERSION}" \
     && npm cache clean --force
 
+COPY --chown=root:root versions.json /opt/sandboxed-cli/versions.json
+
 COPY --chown=root:root rootfs/etc/profile.d/sandboxed-cli.sh /etc/profile.d/sandboxed-cli.sh
 COPY --chown=vercel-sandbox:vercel-sandbox rootfs/home/vercel-sandbox/.bashrc /home/vercel-sandbox/.bashrc
 
-RUN chmod 0644 /etc/profile.d/sandboxed-cli.sh /home/vercel-sandbox/.bashrc \
+RUN chmod 0644 /opt/sandboxed-cli/versions.json /etc/profile.d/sandboxed-cli.sh /home/vercel-sandbox/.bashrc \
     && install -d -o vercel-sandbox -g vercel-sandbox \
       /vercel/sandbox/.sandboxedcli/cache/npm \
       /vercel/sandbox/.sandboxedcli/history \
