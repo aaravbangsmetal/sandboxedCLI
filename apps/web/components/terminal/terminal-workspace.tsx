@@ -240,7 +240,7 @@ export function TerminalWorkspace() {
   return (
     <main className={styles.page}>
       <section className={styles.workspace} aria-label="Cloud terminal workspace">
-        <RepositoryPicker />
+        <RepositoryPicker onRepositoryReady={addTab} />
         <div className={styles.tabRow} role="tablist" aria-label="Open terminals" aria-orientation="horizontal">
           <div className={styles.tabs}>
             {tabs.map((tab) => (

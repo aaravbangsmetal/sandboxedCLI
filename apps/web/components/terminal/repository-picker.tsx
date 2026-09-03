@@ -35,7 +35,11 @@ async function readJson<T>(response: Response) {
   return body;
 }
 
-export function RepositoryPicker() {
+interface RepositoryPickerProps {
+  onRepositoryReady: (directory: string) => void;
+}
+
+export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selected, setSelected] = useState("");
@@ -104,12 +108,13 @@ export function RepositoryPicker() {
           ? `${body.clone.fullName} already at ${body.clone.directory}`
           : `${body.clone.fullName} ready at ${body.clone.directory}`,
       );
+      onRepositoryReady(body.clone.directory);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "clone failed");
     } finally {
       setBusy(false);
     }
-  }, [selectedRepo]);
+  }, [onRepositoryReady, selectedRepo]);
 
   return (
     <div className={styles.repoBar} aria-label="GitHub repository controls">
