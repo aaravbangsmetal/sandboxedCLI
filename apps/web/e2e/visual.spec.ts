@@ -10,6 +10,16 @@ const routes = [
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/auth/session", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        user: { login: "octocat" },
+        scope: "repo",
+      }),
+    });
+  });
   await page.route("**/api/sandbox/environment", async (route) => {
     await route.fulfill({
       contentType: "application/json",
