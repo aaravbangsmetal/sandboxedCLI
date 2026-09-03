@@ -191,6 +191,9 @@ describe("VercelSandboxRuntime", () => {
         { login: "octocat", email: "octocat@example.com" },
       ),
     ).resolves.toMatchObject({ alreadyPresent: true });
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).toContain("fetch origin");
+    expect(command.args.join(" ")).toContain("active_repo_path");
   });
 
   it("rejects unsafe branch names before running sandbox commands", async () => {
