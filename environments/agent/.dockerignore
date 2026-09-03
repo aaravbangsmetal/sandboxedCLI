@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.env.*
+*.log
+node_modules
+artifacts
+test-results
+playwright-report
+
+README.md
+versions.schema.json
