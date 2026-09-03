@@ -3,6 +3,8 @@
 ARG BASE_IMAGE=ubuntu:24.04@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316
 FROM ${BASE_IMAGE}
 
+ARG UBUNTU_SNAPSHOT=20260831T000000Z
+
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.title="sandboxed-cli-agent" \
@@ -14,7 +16,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl sudo \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu/|https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/|g" \
+      -e "s|http://security.ubuntu.com/ubuntu/|https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/|g" \
+      /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends curl sudo \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 vercel-sandbox \
     && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash vercel-sandbox \
