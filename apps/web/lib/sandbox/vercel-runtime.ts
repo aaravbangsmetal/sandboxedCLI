@@ -7,6 +7,7 @@ import type {
   SandboxEnvironmentCheck,
   PauseResult,
   SandboxEnvironmentReport,
+  SandboxRepositoryClone,
   SandboxRuntime,
   SandboxStatus,
   TerminalConnection,
@@ -27,6 +28,9 @@ PROMPT_COMMAND="history -a; history -n"
 PS1=">_ "
 cd "${sandboxConfig.cwd}"
 `;
+
+const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$/;
 
 function degradedEnvironmentReport(detail: string): SandboxEnvironmentReport {
   return {
@@ -72,6 +76,19 @@ function parseEnvironmentReport(stdout: string): SandboxEnvironmentReport {
     image: sandboxConfig.image,
     checks,
   };
+}
+
+function repositoryDirectory(fullName: string) {
+  if (!REPOSITORY_FULL_NAME_PATTERN.test(fullName)) {
+    throw new Error("Repository names must use the owner/name format.");
+  }
+  return `${sandboxConfig.cwd}/repos/${fullName.replaceAll("/", "__")}`;
+}
+
+function assertSafeBranch(branch: string) {
+  if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
+    throw new Error("Branch names may only contain safe Git ref characters.");
+  }
 }
 
 function isNotFound(error: unknown) {
@@ -188,6 +205,67 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       throw new Error(stderr || stdout || "Sandbox environment health check failed.");
     }
     return parseEnvironmentReport(stdout);
+  }
+
+  async cloneRepository(
+    name: string,
+    repository: {
+      fullName: string;
+      cloneUrl: string;
+      defaultBranch: string;
+    },
+    accessToken: string,
+    user: { login: string; email: string | null },
+    branch = repository.defaultBranch,
+  ): Promise<SandboxRepositoryClone> {
+    assertSafeBranch(branch);
+    const sandbox = await Sandbox.getOrCreate({
+      name,
+      image: sandboxConfig.image,
+      persistent: true,
+      timeout: sandboxConfig.timeoutMs,
+      resources: { vcpus: sandboxConfig.vcpus },
+      snapshotExpiration: sandboxConfig.snapshotExpirationMs,
+      keepLastSnapshots: { count: sandboxConfig.keepSnapshots, deleteEvicted: true },
+      tags: { product: "sandboxed-cli", phase: "backend" },
+      resume: true,
+      onCreate: ensureWorkspaceFiles,
+      onResume: ensureWorkspaceFiles,
+    });
+    const directory = repositoryDirectory(repository.fullName);
+    const email = user.email || `${user.login}@users.noreply.github.com`;
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'mkdir -p "$(dirname "$3")"',
+          'if [ -d "$3/.git" ]; then exit 17; fi',
+          'git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" clone --origin origin --branch "$1" --single-branch "$2" "$3"',
+          'git -C "$3" config user.name "$4"',
+          'git -C "$3" config user.email "$5"',
+          'git -C "$3" config pull.rebase false',
+        ].join("\n"),
+        "clone-repository",
+        branch,
+        repository.cloneUrl,
+        directory,
+        user.login,
+        email,
+      ],
+      cwd: sandboxConfig.cwd,
+      env: { GITHUB_TOKEN: accessToken },
+      timeoutMs: 120_000,
+    });
+    if (result.exitCode === 17) {
+      return { fullName: repository.fullName, branch, directory, alreadyPresent: true };
+    }
+    if (result.exitCode !== 0) {
+      const stderr = await result.stderr();
+      throw new Error(stderr || "Repository clone failed.");
+    }
+    return { fullName: repository.fullName, branch, directory, alreadyPresent: false };
   }
 
   async openTerminal(

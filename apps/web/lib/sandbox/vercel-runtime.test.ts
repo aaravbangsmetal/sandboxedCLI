@@ -124,6 +124,82 @@ describe("VercelSandboxRuntime", () => {
     });
   });
 
+  it("clones a GitHub repository into the persistent sandbox workspace", async () => {
+    const sandbox = fakeSandbox();
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: null },
+      ),
+    ).resolves.toEqual({
+      fullName: "octocat/hello-world",
+      branch: "main",
+      directory: "/vercel/sandbox/repos/octocat__hello-world",
+      alreadyPresent: false,
+    });
+
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cmd: "sh",
+        env: { GITHUB_TOKEN: "gho_token" },
+        cwd: "/vercel/sandbox",
+      }),
+    );
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).not.toContain("gho_token");
+  });
+
+  it("reports an already cloned repository without failing", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 17,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: "octocat@example.com" },
+      ),
+    ).resolves.toMatchObject({ alreadyPresent: true });
+  });
+
+  it("rejects unsafe branch names before running sandbox commands", async () => {
+    const sandbox = fakeSandbox();
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: null },
+        "../main",
+      ),
+    ).rejects.toThrow("Branch names may only contain safe Git ref characters.");
+    expect(sdk.getOrCreate).not.toHaveBeenCalled();
+  });
+
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {
     const running = fakeSandbox("running");
     const stopped = fakeSandbox("stopped");
