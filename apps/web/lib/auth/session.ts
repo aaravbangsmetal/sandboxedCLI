@@ -15,6 +15,7 @@ export interface GitHubSession {
     name: string | null;
     avatarUrl: string;
     htmlUrl: string;
+    email: string | null;
   };
   createdAt: number;
   expiresAt: number;

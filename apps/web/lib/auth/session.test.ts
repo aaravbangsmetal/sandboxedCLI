@@ -18,6 +18,7 @@ const session: GitHubSession = {
     name: "The Octocat",
     avatarUrl: "https://github.com/images/error/octocat_happy.gif",
     htmlUrl: "https://github.com/octocat",
+    email: "octocat@example.com",
   },
   createdAt: 1_000,
   expiresAt: 10_000,

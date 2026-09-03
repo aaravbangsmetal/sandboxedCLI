@@ -35,6 +35,7 @@ describe("GET /api/auth/github/callback", () => {
       name: null,
       avatarUrl: "https://avatars.githubusercontent.com/u/1",
       htmlUrl: "https://github.com/octocat",
+      email: "octocat@example.com",
     });
   });
 
@@ -48,7 +49,7 @@ describe("GET /api/auth/github/callback", () => {
     expect(authSession.setGitHubSession).toHaveBeenCalledWith(
       expect.objectContaining({
         accessToken: "gho_token",
-        user: expect.objectContaining({ login: "octocat" }),
+        user: expect.objectContaining({ login: "octocat", email: "octocat@example.com" }),
       }),
     );
   });

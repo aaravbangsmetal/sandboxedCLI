@@ -46,6 +46,7 @@ export async function GET(request: Request) {
         name: viewer.name,
         avatarUrl: viewer.avatarUrl,
         htmlUrl: viewer.htmlUrl,
+        email: viewer.email,
       },
       createdAt,
       expiresAt: createdAt + githubAuthConfig.sessionMaxAgeSeconds * 1_000,
