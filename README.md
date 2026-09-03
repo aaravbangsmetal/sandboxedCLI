@@ -36,7 +36,7 @@ pnpm dev
 
 Vercel deployments receive `VERCEL_OIDC_TOKEN` automatically. Outside that environment, configure either the OIDC token or all of `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID`. See [`apps/web/.env.example`](apps/web/.env.example).
 
-The default image is `vercel/sandbox/universal:latest`. This phase consumes that image as provided; custom agent installation and a reproducible image belong to the later `envs` branch.
+The default image on `envs` is `sandboxed-cli-agent:dev`. Build it from [`environments/agent/Dockerfile`](environments/agent/Dockerfile), publish it to Vercel Container Registry, then set `SANDBOX_IMAGE` to the ready repository tag printed by [`environments/agent/scripts/publish-vcr.sh`](environments/agent/scripts/publish-vcr.sh).
 
 ## Lifecycle API
 
