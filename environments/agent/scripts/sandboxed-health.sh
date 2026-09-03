@@ -89,6 +89,10 @@ check_writable_directory "workspace" "${workspace_path}"
 check_writable_directory "state" "${state_path}"
 check_writable_directory "history" "${state_path}/history"
 check_writable_directory "npm-cache" "${state_path}/cache/npm"
+check_writable_directory "codex-home" "${CODEX_HOME:-${state_path}/agents/codex}"
+check_writable_directory "claude-config" "${CLAUDE_CONFIG_DIR:-${state_path}/agents/claude}"
+check_writable_directory "xdg-config" "${XDG_CONFIG_HOME:-${state_path}/agents/xdg-config}"
+check_writable_directory "xdg-data" "${XDG_DATA_HOME:-${state_path}/agents/xdg-data}"
 
 overall="ok"
 if [ "${failed}" -ne 0 ]; then
