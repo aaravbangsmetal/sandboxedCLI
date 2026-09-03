@@ -123,6 +123,7 @@ export interface SandboxRuntime {
     name: string,
     terminalId: string,
     size: { cols: number; rows: number },
+    githubAccessToken: string,
   ): Promise<TerminalConnection>;
   pause(name: string): Promise<PauseResult>;
   extend(name: string, durationMs: number): Promise<SandboxStatus>;
