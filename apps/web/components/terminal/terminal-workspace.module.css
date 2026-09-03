@@ -1,0 +1,210 @@
+.page {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.workspace {
+  width: min(840px, calc(100vw - 32px));
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.tabRow {
+  height: 48px;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  padding: 0 28px;
+  overflow: hidden;
+}
+
+.tabs {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabWrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 174px;
+  padding: 0 16px;
+  color: #7d7d7d;
+}
+
+.activeTab {
+  position: relative;
+  background: #f8f8f8;
+  border-radius: 27px 27px 0 0;
+  color: #1a1a1a;
+}
+
+.tab,
+.close,
+.newTab,
+.footer button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab {
+  flex: 1;
+  height: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.close {
+  width: 22px;
+  height: 22px;
+  color: #a2a2a2;
+  border-radius: 4px;
+}
+
+.newTab {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+  color: #438ed6;
+  white-space: nowrap;
+}
+
+.terminalPanel {
+  height: 565px;
+  padding: 30px 36px;
+  overflow: hidden;
+  border-radius: 27px;
+  background: #f8f8f8;
+}
+
+.xtermHost {
+  width: 100%;
+  height: 100%;
+}
+
+.xtermHost :global(.xterm) {
+  height: 100%;
+}
+
+.xtermHost :global(.xterm-viewport) {
+  scrollbar-color: #dedede transparent;
+  scrollbar-width: thin;
+}
+
+.footer {
+  display: grid;
+  grid-template-columns: auto 1.55fr 1.12fr 1.3fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 18px 0;
+  color: #a2a2a2;
+  white-space: nowrap;
+}
+
+.footer a {
+  color: #a2a2a2;
+  text-decoration: none;
+}
+
+.footer .dark {
+  color: #1a1a1a;
+}
+
+.footer .logout {
+  color: #438ed6;
+}
+
+.tab:focus-visible,
+.close:focus-visible,
+.newTab:focus-visible,
+.footer button:focus-visible,
+.footer a:focus-visible {
+  outline: 1px solid #438ed6;
+  outline-offset: 4px;
+}
+
+.tab:hover,
+.close:hover,
+.footer button:hover,
+.footer a:hover {
+  color: #438ed6;
+}
+
+@media (max-width: 680px) {
+  .page {
+    place-items: start center;
+    padding-block: 20px;
+  }
+
+  .workspace {
+    display: flex;
+    min-height: calc(100svh - 40px);
+    flex-direction: column;
+  }
+
+  .tabRow {
+    padding-inline: 14px;
+  }
+
+  .tabWrap {
+    min-width: 150px;
+    padding-inline: 12px;
+  }
+
+  .terminalPanel {
+    flex: 1;
+    min-height: 470px;
+    height: calc(100svh - 190px);
+    padding: 24px 20px;
+  }
+
+  .footer {
+    grid-template-columns: auto 1fr auto;
+    gap: 10px 16px;
+    padding-inline: 8px;
+    font-size: 12px;
+    white-space: normal;
+  }
+
+  .footer > :nth-child(3) {
+    grid-column: 1 / 2;
+  }
+
+  .footer > :nth-child(4) {
+    grid-column: 2 / 3;
+  }
+
+  .footer > :nth-child(5) {
+    grid-column: 3 / 4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
