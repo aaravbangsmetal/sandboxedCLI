@@ -123,6 +123,10 @@ RUN chmod 0644 /opt/sandboxed-cli/versions.json /etc/profile.d/sandboxed-cli.sh 
     && chmod 0755 /usr/local/bin/sandboxed-health /usr/local/bin/sandboxed-env \
     && install -d -o vercel-sandbox -g vercel-sandbox \
       /vercel/sandbox/.sandboxedcli/cache/npm \
+      /vercel/sandbox/.sandboxedcli/agents/codex \
+      /vercel/sandbox/.sandboxedcli/agents/claude \
+      /vercel/sandbox/.sandboxedcli/agents/xdg-config \
+      /vercel/sandbox/.sandboxedcli/agents/xdg-data \
       /vercel/sandbox/.sandboxedcli/history \
       /vercel/sandbox/.sandboxedcli/logs \
       /vercel/sandbox/.sandboxedcli/pnpm

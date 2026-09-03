@@ -8,6 +8,10 @@ export HISTSIZE=10000
 export HISTFILESIZE=20000
 export NPM_CONFIG_CACHE="${SANDBOXED_CLI_STATE}/cache/npm"
 export PNPM_HOME="${SANDBOXED_CLI_STATE}/pnpm"
+export CODEX_HOME="${SANDBOXED_CLI_STATE}/agents/codex"
+export CLAUDE_CONFIG_DIR="${SANDBOXED_CLI_STATE}/agents/claude"
+export XDG_CONFIG_HOME="${SANDBOXED_CLI_STATE}/agents/xdg-config"
+export XDG_DATA_HOME="${SANDBOXED_CLI_STATE}/agents/xdg-data"
 export EDITOR=vim
 export PAGER=less
 
@@ -18,8 +22,12 @@ esac
 
 mkdir -p \
   "${SANDBOXED_CLI_STATE}/cache/npm" \
+  "${CODEX_HOME}" \
+  "${CLAUDE_CONFIG_DIR}" \
   "${SANDBOXED_CLI_STATE}/history" \
   "${SANDBOXED_CLI_STATE}/logs" \
+  "${XDG_CONFIG_HOME}" \
+  "${XDG_DATA_HOME}" \
   "${SANDBOXED_CLI_TMP}" \
   2>/dev/null || true
 
