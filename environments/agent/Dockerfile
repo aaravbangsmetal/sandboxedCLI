@@ -10,6 +10,7 @@ ARG PNPM_VERSION=11.25.0
 ARG GH_VERSION=2.99.0
 ARG GH_SHA256=ed4960225d2833e04a61590d9fa2b5773d147f3aa375459e5466a40c102f3832
 ARG CODEX_VERSION=0.153.0
+ARG CLAUDE_CODE_VERSION=2.1.259
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -19,7 +20,8 @@ LABEL org.opencontainers.image.title="sandboxed-cli-agent" \
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    DISABLE_AUTOUPDATER=1
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates \
@@ -98,6 +100,11 @@ RUN curl --fail --silent --show-error --location \
 
 RUN npm install --global --include=optional --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" \
     && codex --version | grep --fixed-strings "${CODEX_VERSION}" \
+    && npm cache clean --force
+
+RUN npm install --global --include=optional --no-audit --no-fund \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    && claude --version | grep --fixed-strings "${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
 WORKDIR /vercel/sandbox
