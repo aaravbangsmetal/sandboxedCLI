@@ -82,12 +82,17 @@ export function TerminalWorkspace() {
       if (event.key === "ArrowLeft") targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
       if (event.key === "Home") targetIndex = 0;
       if (event.key === "End") targetIndex = tabs.length - 1;
+      if (event.key === "Delete") {
+        event.preventDefault();
+        closeTab(id);
+        return;
+      }
 
       if (targetIndex === null) return;
       event.preventDefault();
       selectAndFocusTab(tabs[targetIndex].id);
     },
-    [selectAndFocusTab, tabs],
+    [closeTab, selectAndFocusTab, tabs],
   );
 
   useEffect(() => {
@@ -106,7 +111,12 @@ export function TerminalWorkspace() {
   return (
     <main className={styles.page}>
       <section className={styles.workspace} aria-label="Cloud terminal workspace">
-        <div className={styles.tabRow} role="tablist" aria-label="Open terminals">
+        <div
+          className={styles.tabRow}
+          role="tablist"
+          aria-label="Open terminals"
+          aria-orientation="horizontal"
+        >
           <div className={styles.tabs}>
             {tabs.map((tab) => (
               <div

@@ -29,6 +29,7 @@ export function XtermPane({ transport, label }: XtermPaneProps) {
       fontSize: 14,
       fontWeight: "400",
       lineHeight: 1.35,
+      screenReaderMode: true,
       scrollback: 2_000,
       theme: {
         background: "#f8f8f8",
@@ -75,4 +76,3 @@ export function XtermPane({ transport, label }: XtermPaneProps) {
 
   return <div ref={hostRef} className={styles.xtermHost} role="region" aria-label={label} />;
 }
-
