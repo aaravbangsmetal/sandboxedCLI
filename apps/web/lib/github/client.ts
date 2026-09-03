@@ -29,6 +29,14 @@ export interface GitHubRepository {
   };
 }
 
+export interface GitHubPullRequest {
+  number: number;
+  htmlUrl: string;
+  head: string;
+  base: string;
+  title: string;
+}
+
 interface OAuthTokenResponse {
   access_token?: unknown;
   scope?: unknown;
@@ -62,6 +70,14 @@ interface GitHubRepoResponse {
   default_branch?: unknown;
   pushed_at?: unknown;
   permissions?: Partial<GitHubRepository["permissions"]>;
+}
+
+interface GitHubPullRequestResponse {
+  number?: unknown;
+  html_url?: unknown;
+  head?: { ref?: unknown };
+  base?: { ref?: unknown };
+  title?: unknown;
 }
 
 export class GitHubApiError extends Error {
@@ -221,4 +237,41 @@ export async function listGitHubRepositories(accessToken: string) {
     { headers: githubHeaders(accessToken) },
   );
   return repos.map(normalizeRepository);
+}
+
+export async function createGitHubPullRequest(
+  accessToken: string,
+  fullName: string,
+  input: { title: string; body: string; head: string; base: string },
+): Promise<GitHubPullRequest> {
+  const pullRequest = await githubJson<GitHubPullRequestResponse>(
+    `https://api.github.com/repos/${encodeURIComponent(fullName).replace("%2F", "/")}/pulls`,
+    {
+      method: "POST",
+      headers: { ...githubHeaders(accessToken), "content-type": "application/json" },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        head: input.head,
+        base: input.base,
+        maintainer_can_modify: true,
+      }),
+    },
+  );
+  if (
+    typeof pullRequest.number !== "number" ||
+    typeof pullRequest.html_url !== "string" ||
+    typeof pullRequest.title !== "string" ||
+    typeof pullRequest.head?.ref !== "string" ||
+    typeof pullRequest.base?.ref !== "string"
+  ) {
+    throw new GitHubApiError("GitHub pull request response was incomplete.", 502);
+  }
+  return {
+    number: pullRequest.number,
+    htmlUrl: pullRequest.html_url,
+    head: pullRequest.head.ref,
+    base: pullRequest.base.ref,
+    title: pullRequest.title,
+  };
 }

@@ -5,6 +5,7 @@ vi.hoisted(() => {
 });
 
 import {
+  createGitHubPullRequest,
   exchangeGitHubCode,
   fetchGitHubViewer,
   githubAuthorizeUrl,
@@ -80,5 +81,35 @@ describe("GitHub client", () => {
     await expect(listGitHubRepositories("gho_token")).resolves.toMatchObject([
       { fullName: "octocat/hello-world", permissions: { pull: true, push: true } },
     ]);
+  });
+
+  it("creates a pull request for a pushed sandbox branch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          number: 12,
+          html_url: "https://github.com/octocat/hello-world/pull/12",
+          title: "Sandbox changes",
+          head: { ref: "sandboxedcli/change" },
+          base: { ref: "main" },
+        }),
+      ),
+    );
+
+    await expect(
+      createGitHubPullRequest("gho_token", "octocat/hello-world", {
+        title: "Sandbox changes",
+        body: "Created from sandboxed/cli.",
+        head: "sandboxedcli/change",
+        base: "main",
+      }),
+    ).resolves.toEqual({
+      number: 12,
+      htmlUrl: "https://github.com/octocat/hello-world/pull/12",
+      title: "Sandbox changes",
+      head: "sandboxedcli/change",
+      base: "main",
+    });
   });
 });
