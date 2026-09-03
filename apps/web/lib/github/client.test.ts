@@ -53,6 +53,28 @@ describe("GitHub client", () => {
     ]);
   });
 
+  it("paginates repository access beyond GitHub's first page", async () => {
+    const repository = (id: number) => ({
+      id,
+      name: `repo-${id}`,
+      full_name: `octocat/repo-${id}`,
+      private: false,
+      html_url: `https://github.com/octocat/repo-${id}`,
+      clone_url: `https://github.com/octocat/repo-${id}.git`,
+      default_branch: "main",
+      pushed_at: null,
+      permissions: { pull: true, push: true },
+    });
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const page = new URL(String(url)).searchParams.get("page");
+      return Response.json(page === "1" ? Array.from({ length: 100 }, (_, id) => repository(id)) : [repository(100)]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listGitHubRepositories("gho_token")).resolves.toHaveLength(101);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("creates a pull request for a pushed sandbox branch", async () => {
     vi.stubGlobal(
       "fetch",
