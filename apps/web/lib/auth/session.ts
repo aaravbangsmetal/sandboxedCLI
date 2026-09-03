@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 import { githubAuthConfig, githubSessionSecret } from "./config";
@@ -56,7 +56,8 @@ function isGitHubSession(value: unknown): value is GitHubSession {
     typeof user.login === "string" &&
     (typeof user.name === "string" || user.name === null) &&
     typeof user.avatarUrl === "string" &&
-    typeof user.htmlUrl === "string"
+    typeof user.htmlUrl === "string" &&
+    (typeof user.email === "string" || user.email === null)
   );
 }
 
@@ -115,7 +116,7 @@ export async function clearGitHubSession() {
 
 export function createOAuthState() {
   const verifier = randomBytes(32).toString("base64url");
-  const signature = createHash("sha256").update(`${githubSessionSecret()}:${verifier}`).digest();
+  const signature = createHmac("sha256", githubSessionSecret()).update(verifier).digest();
   return `${verifier}.${base64UrlEncode(signature)}`;
 }
 
@@ -124,7 +125,7 @@ export function verifyOAuthState(value: string | undefined) {
   const [verifier, encodedSignature, extra] = value.split(".");
   if (extra || !verifier || !encodedSignature) return false;
   try {
-    const expected = createHash("sha256").update(`${githubSessionSecret()}:${verifier}`).digest();
+    const expected = createHmac("sha256", githubSessionSecret()).update(verifier).digest();
     const supplied = base64UrlDecode(encodedSignature);
     return expected.length === supplied.length && timingSafeEqual(expected, supplied);
   } catch {
