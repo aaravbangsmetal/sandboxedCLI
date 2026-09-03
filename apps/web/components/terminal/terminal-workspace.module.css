@@ -73,8 +73,8 @@
 }
 
 .close {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   color: var(--color-text-muted);
   border-radius: 4px;
 }
@@ -105,8 +105,14 @@
 }
 
 .xtermHost :global(.xterm-viewport) {
+  background-color: var(--color-terminal-panel) !important;
+  overflow-x: hidden;
   scrollbar-color: var(--color-border) transparent;
   scrollbar-width: thin;
+}
+
+.xtermHost :global(.xterm-decoration-container) {
+  display: none;
 }
 
 .footer {

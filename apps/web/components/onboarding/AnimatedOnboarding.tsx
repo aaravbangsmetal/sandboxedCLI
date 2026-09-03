@@ -21,11 +21,11 @@ export function AnimatedOnboarding({
   holdMs,
 }: AnimatedOnboardingProps) {
   const router = useRouter();
-  const advance = useCallback(() => router.push(destination), [destination, router]);
+  const advance = useCallback(() => router.replace(destination), [destination, router]);
 
   return (
-    <OnboardingShell>
-      <section className={styles.copy} aria-label={completionMessage}>
+    <OnboardingShell wide>
+      <section className={styles.copy} aria-label="Onboarding progress">
         <TerminalSequence
           lines={lines}
           completionMessage={completionMessage}

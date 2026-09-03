@@ -23,6 +23,12 @@
   transform: translateY(-1.5vh);
 }
 
+.sequenceContent {
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  transform: translate(35px, -1.5vh);
+}
+
 .brand {
   margin: 0 0 27px;
   font: inherit;
@@ -160,6 +166,12 @@
     width: 100%;
     max-width: none;
     padding: 0 24px;
+    transform: translateY(-1vh);
+  }
+
+  .sequenceContent {
+    width: 100%;
+    max-width: none;
     transform: translateY(-1vh);
   }
 }

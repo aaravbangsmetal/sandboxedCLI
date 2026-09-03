@@ -161,18 +161,21 @@ export function TerminalWorkspace() {
           </button>
         </div>
 
-        <div
-          className={styles.terminalPanel}
-          id={`terminal-panel-${activeTab.id}`}
-          role="tabpanel"
-          aria-labelledby={`terminal-tab-${activeTab.id}`}
-        >
-          <XtermPane
-            key={activeTab.id}
-            transport={activeTab.transport}
-            label={`${activeTab.title} interactive mock terminal`}
-          />
-        </div>
+        {tabs.map((tab) => (
+          <div
+            className={styles.terminalPanel}
+            id={`terminal-panel-${tab.id}`}
+            key={tab.id}
+            role="tabpanel"
+            aria-labelledby={`terminal-tab-${tab.id}`}
+            hidden={tab.id !== activeTab.id}
+          >
+            <XtermPane
+              transport={tab.transport}
+              label={`${tab.title} interactive mock terminal`}
+            />
+          </div>
+        ))}
 
         <footer className={styles.footer}>
           <span>$_X;</span>

@@ -45,7 +45,7 @@ describe("MockTerminalTransport", () => {
     expect(output).toContain(">_");
   });
 
-  it("delays logout briefly and cleans up its output subscription", () => {
+  it("delays logout briefly", () => {
     vi.useFakeTimers();
     const onLogout = vi.fn();
     const onOutput = vi.fn();
@@ -57,8 +57,20 @@ describe("MockTerminalTransport", () => {
     vi.advanceTimersByTime(180);
     expect(onLogout).toHaveBeenCalledOnce();
 
+  });
+
+  it("cancels pending logout and output when disposed", () => {
+    vi.useFakeTimers();
+    const onLogout = vi.fn();
+    const onOutput = vi.fn();
+    const transport = new MockTerminalTransport({ onLogout });
+    transport.connect(onOutput);
+    transport.write("logout\r");
     transport.dispose();
     transport.write("help\r");
+    vi.runAllTimers();
+
+    expect(onLogout).not.toHaveBeenCalled();
     expect(onOutput).not.toHaveBeenCalledWith(expect.stringContaining("available commands"));
   });
 });

@@ -112,7 +112,9 @@ export function TerminalSequence({
           0,
           Math.min(lineLengths[lineIndex], renderedCharacters - lineStarts[lineIndex]),
         );
-        const showCursor = lineIndex === (activeLineIndex === -1 ? lines.length - 1 : activeLineIndex);
+        const showCursor =
+          renderedCharacters < totalCharacters &&
+          lineIndex === (activeLineIndex === -1 ? lines.length - 1 : activeLineIndex);
 
         let remaining = visibleOnLine;
         return (

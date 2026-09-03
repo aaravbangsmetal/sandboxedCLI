@@ -29,6 +29,7 @@ export class MockTerminalTransport implements TerminalTransport {
   private input = "";
   private transcript = "";
   private hasConnected = false;
+  private logoutTimer: number | null = null;
   private readonly onLogout?: () => void;
 
   constructor(options: MockTerminalTransportOptions = {}) {
@@ -86,6 +87,10 @@ export class MockTerminalTransport implements TerminalTransport {
 
   dispose(): void {
     this.onOutput = null;
+    if (this.logoutTimer !== null) {
+      window.clearTimeout(this.logoutTimer);
+      this.logoutTimer = null;
+    }
   }
 
   private runCommand(command: string): void {
@@ -102,7 +107,10 @@ export class MockTerminalTransport implements TerminalTransport {
 
     if (command === "logout") {
       this.emit("\r\n\x1b[90mending interface session...\x1b[0m\r\n");
-      window.setTimeout(() => this.onLogout?.(), 180);
+      this.logoutTimer = window.setTimeout(() => {
+        this.logoutTimer = null;
+        this.onLogout?.();
+      }, 180);
       return;
     }
 
