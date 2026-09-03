@@ -30,5 +30,44 @@ RUN apt-get update \
     && chmod 0440 /etc/sudoers.d/vercel-sandbox \
     && install -d -o vercel-sandbox -g vercel-sandbox /vercel/sandbox
 
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+      bash-completion \
+      build-essential \
+      dnsutils \
+      fd-find \
+      file \
+      git \
+      git-lfs \
+      iproute2 \
+      jq \
+      less \
+      libssl-dev \
+      lsof \
+      nano \
+      netcat-openbsd \
+      openssh-client \
+      patch \
+      pkg-config \
+      procps \
+      python3 \
+      python3-dev \
+      python3-pip \
+      python3-venv \
+      ripgrep \
+      rsync \
+      shellcheck \
+      sqlite3 \
+      tmux \
+      tree \
+      unzip \
+      vim-tiny \
+      xz-utils \
+      zip \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    && ln -s /usr/bin/python3 /usr/local/bin/python \
+    && git lfs install --system \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /vercel/sandbox
 USER vercel-sandbox
