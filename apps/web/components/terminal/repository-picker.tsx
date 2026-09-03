@@ -73,13 +73,16 @@ export function RepositoryPicker() {
 
   useEffect(() => {
     let active = true;
-    void loadRepositories().catch((error) => {
-      if (!active) return;
-      setAuthenticated(false);
-      setMessage(error instanceof Error ? error.message : "github unavailable");
-    });
+    const timer = window.setTimeout(() => {
+      void loadRepositories().catch((error) => {
+        if (!active) return;
+        setAuthenticated(false);
+        setMessage(error instanceof Error ? error.message : "github unavailable");
+      });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [loadRepositories]);
 
