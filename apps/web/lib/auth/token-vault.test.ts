@@ -28,7 +28,6 @@ describe("GitHub provider token vault", () => {
 
   it("requires an encryption secret", () => {
     delete process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
-    delete process.env.GITHUB_SESSION_SECRET;
     expect(() => encryptProviderToken("gho_secret-token")).toThrow(
       "GITHUB_TOKEN_ENCRYPTION_KEY is required.",
     );

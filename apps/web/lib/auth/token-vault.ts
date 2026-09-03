@@ -5,7 +5,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function encryptionKey() {
-  const secret = process.env.GITHUB_TOKEN_ENCRYPTION_KEY || process.env.GITHUB_SESSION_SECRET;
+  const secret = process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
   if (!secret) throw new Error("GITHUB_TOKEN_ENCRYPTION_KEY is required.");
   return createHash("sha256").update(secret).digest();
 }
