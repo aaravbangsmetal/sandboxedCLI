@@ -14,6 +14,68 @@
   font-weight: 400;
 }
 
+.repoBar {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px 10px;
+  color: var(--color-text-muted);
+}
+
+.repoStatus {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repoBar a,
+.repoBar button,
+.repoBar select {
+  color: var(--color-text-secondary);
+  font: inherit;
+}
+
+.repoBar a,
+.repoBar button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.repoBar select {
+  max-width: 280px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: var(--color-canvas);
+}
+
+.repoBar a:hover,
+.repoBar button:hover,
+.repoBar a:focus-visible,
+.repoBar button:focus-visible {
+  color: var(--color-accent);
+}
+
+.repoBar a:focus-visible,
+.repoBar button:focus-visible,
+.repoBar select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.repoBar button:disabled,
+.repoBar select:disabled {
+  color: var(--color-border);
+  cursor: not-allowed;
+}
+
 .tabRow {
   height: 48px;
   display: flex;
@@ -165,6 +227,92 @@
   margin-right: 6px;
 }
 
+.deliveryPanel {
+  margin: 8px 18px 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  background: var(--color-canvas);
+}
+
+.deliveryHeader,
+.deliveryFooter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+}
+
+.deliveryHeader {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.deliveryHeader span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deliveryBody {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.deliveryBody pre {
+  max-height: 86px;
+  margin: 0;
+  overflow: auto;
+  color: var(--color-text-muted);
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.deliveryBody label {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.deliveryBody input,
+.deliveryBody textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: var(--color-text-primary);
+  background: var(--color-canvas);
+  font: inherit;
+  resize: vertical;
+}
+
+.deliveryFooter {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border);
+}
+
+.deliveryHeader button,
+.deliveryFooter button,
+.deliveryFooter a {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.deliveryHeader button:disabled,
+.deliveryFooter button:disabled {
+  color: var(--color-border);
+  cursor: not-allowed;
+}
+
 .footer {
   display: grid;
   grid-template-columns: auto 1.55fr 1.12fr 1.3fr auto;
@@ -191,6 +339,11 @@
 .tab:focus-visible,
 .close:focus-visible,
 .newTab:focus-visible,
+.deliveryHeader button:focus-visible,
+.deliveryFooter button:focus-visible,
+.deliveryFooter a:focus-visible,
+.deliveryBody input:focus-visible,
+.deliveryBody textarea:focus-visible,
 .footer button:focus-visible,
 .footer a:focus-visible {
   outline: 2px solid var(--color-accent);
@@ -199,6 +352,9 @@
 
 .tab:hover,
 .close:hover,
+.deliveryHeader button:hover,
+.deliveryFooter button:hover,
+.deliveryFooter a:hover,
 .footer button:hover,
 .footer a:hover {
   color: var(--color-accent);
@@ -218,6 +374,20 @@
 
   .tabRow {
     padding-inline: 14px;
+  }
+
+  .repoBar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-inline: 8px;
+  }
+
+  .repoStatus {
+    flex: 1 0 100%;
+  }
+
+  .repoBar select {
+    max-width: min(100%, 260px);
   }
 
   .tabWrap {
@@ -249,6 +419,14 @@
 
   .lifecycleStatus {
     flex: 1 0 100%;
+  }
+
+  .deliveryPanel {
+    margin-inline: 8px;
+  }
+
+  .deliveryBody label {
+    grid-template-columns: 1fr;
   }
 
   .persistenceNote {

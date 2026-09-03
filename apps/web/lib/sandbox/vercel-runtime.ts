@@ -7,12 +7,21 @@ import type {
   SandboxEnvironmentCheck,
   PauseResult,
   SandboxEnvironmentReport,
+  SandboxGitDiff,
+  SandboxGitStatus,
+  SandboxPushedBranch,
+  SandboxRepositoryClone,
   SandboxRuntime,
   SandboxStatus,
   TerminalConnection,
 } from "./contracts";
 import { hasVercelSandboxCredentials, sandboxConfig } from "./config";
-import { SandboxNotConfiguredError, SandboxNotFoundError } from "./errors";
+import {
+  NoRepositoryChangesError,
+  RepositoryWorkspaceError,
+  SandboxNotConfiguredError,
+  SandboxNotFoundError,
+} from "./errors";
 import { tmuxSessionName } from "./terminal-id";
 
 const BASH_RC = `# Managed by sandboxed/cli
@@ -25,8 +34,20 @@ export HISTFILESIZE=20000
 shopt -s histappend
 PROMPT_COMMAND="history -a; history -n"
 PS1=">_ "
-cd "${sandboxConfig.cwd}"
+if [ -f "${sandboxConfig.stateDirectory}/active_repo_path" ]; then
+  repo_path="$(cat "${sandboxConfig.stateDirectory}/active_repo_path")"
+  if [ -d "$repo_path/.git" ]; then
+    cd "$repo_path"
+  else
+    cd "${sandboxConfig.cwd}"
+  fi
+else
+  cd "${sandboxConfig.cwd}"
+fi
 `;
+
+const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$/;
 
 function degradedEnvironmentReport(detail: string): SandboxEnvironmentReport {
   return {
@@ -72,6 +93,46 @@ function parseEnvironmentReport(stdout: string): SandboxEnvironmentReport {
     image: sandboxConfig.image,
     checks,
   };
+}
+
+function repositoryDirectory(fullName: string) {
+  if (!REPOSITORY_FULL_NAME_PATTERN.test(fullName)) {
+    throw new Error("Repository names must use the owner/name format.");
+  }
+  return `${sandboxConfig.cwd}/repos/${fullName.replaceAll("/", "__")}`;
+}
+
+function assertSafeBranch(branch: string) {
+  if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
+    throw new Error("Branch names may only contain safe Git ref characters.");
+  }
+}
+
+async function commandStdoutOrThrow(
+  result: Awaited<ReturnType<Sandbox["runCommand"]>>,
+  fallback: string,
+) {
+  const stdout = await result.stdout();
+  if (result.exitCode === 0) return stdout;
+  const stderr = await result.stderr();
+  throw new Error(stderr || stdout || fallback);
+}
+
+function splitRepositoryCommandOutput(output: string) {
+  const newline = output.indexOf("\n");
+  if (newline === -1) return { repositoryDirectory: output.trim(), output: "" };
+  return {
+    repositoryDirectory: output.slice(0, newline).trim(),
+    output: output.slice(newline + 1),
+  };
+}
+
+function parsePushedBranch(output: string): SandboxPushedBranch {
+  const [fullName, branch, baseBranch, commitSha] = output.trim().split("\n");
+  if (!fullName || !branch || !/^[a-f0-9]{40}$/.test(commitSha || "")) {
+    throw new RepositoryWorkspaceError("Sandbox did not return pushed branch metadata.");
+  }
+  return { fullName, branch, baseBranch: baseBranch || "main", commitSha };
 }
 
 function isNotFound(error: unknown) {
@@ -188,6 +249,162 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       throw new Error(stderr || stdout || "Sandbox environment health check failed.");
     }
     return parseEnvironmentReport(stdout);
+  }
+
+  async cloneRepository(
+    name: string,
+    repository: {
+      fullName: string;
+      cloneUrl: string;
+      defaultBranch: string;
+    },
+    accessToken: string,
+    user: { login: string; email: string | null },
+    branch = repository.defaultBranch,
+  ): Promise<SandboxRepositoryClone> {
+    assertSafeBranch(branch);
+    const sandbox = await Sandbox.getOrCreate({
+      name,
+      image: sandboxConfig.image,
+      persistent: true,
+      timeout: sandboxConfig.timeoutMs,
+      resources: { vcpus: sandboxConfig.vcpus },
+      snapshotExpiration: sandboxConfig.snapshotExpirationMs,
+      keepLastSnapshots: { count: sandboxConfig.keepSnapshots, deleteEvicted: true },
+      tags: { product: "sandboxed-cli", phase: "backend" },
+      resume: true,
+      onCreate: ensureWorkspaceFiles,
+      onResume: ensureWorkspaceFiles,
+    });
+    const directory = repositoryDirectory(repository.fullName);
+    const email = user.email || `${user.login}@users.noreply.github.com`;
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'mkdir -p "$(dirname "$3")"',
+          'if [ -d "$3/.git" ]; then exit 17; fi',
+          'git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" clone --origin origin --branch "$1" --single-branch "$2" "$3"',
+          'git -C "$3" config user.name "$4"',
+          'git -C "$3" config user.email "$5"',
+          'git -C "$3" config pull.rebase false',
+          'printf "%s\n" "$3" > "/vercel/sandbox/.sandboxedcli/active_repo_path"',
+          'printf "%s\n" "$6" > "/vercel/sandbox/.sandboxedcli/active_repo_full_name"',
+          'printf "%s\n" "$7" > "/vercel/sandbox/.sandboxedcli/active_repo_default_branch"',
+        ].join("\n"),
+        "clone-repository",
+        branch,
+        repository.cloneUrl,
+        directory,
+        user.login,
+        email,
+        repository.fullName,
+        repository.defaultBranch,
+      ],
+      cwd: sandboxConfig.cwd,
+      env: { GITHUB_TOKEN: accessToken },
+      timeoutMs: 120_000,
+    });
+    if (result.exitCode === 17) {
+      return { fullName: repository.fullName, branch, directory, alreadyPresent: true };
+    }
+    if (result.exitCode !== 0) {
+      const stderr = await result.stderr();
+      throw new Error(stderr || "Repository clone failed.");
+    }
+    return { fullName: repository.fullName, branch, directory, alreadyPresent: false };
+  }
+
+  async gitStatus(name: string): Promise<SandboxGitStatus> {
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          'printf "%s\n" "$repo"',
+          'git -C "$repo" status --short --branch',
+        ].join("\n"),
+      ],
+      cwd: sandboxConfig.cwd,
+      timeoutMs: 30_000,
+    });
+    return splitRepositoryCommandOutput(await commandStdoutOrThrow(result, "Git status failed."));
+  }
+
+  async gitDiff(name: string): Promise<SandboxGitDiff> {
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          'printf "%s\n" "$repo"',
+          'git -C "$repo" diff --stat',
+          'git -C "$repo" diff --no-ext-diff --color=never | head -c 120000',
+        ].join("\n"),
+      ],
+      cwd: sandboxConfig.cwd,
+      timeoutMs: 30_000,
+    });
+    const output = await commandStdoutOrThrow(result, "Git diff failed.");
+    const parsed = splitRepositoryCommandOutput(output);
+    return {
+      repositoryDirectory: parsed.repositoryDirectory,
+      output: parsed.output,
+      truncated: parsed.output.length >= 120000,
+    };
+  }
+
+  async commitAndPushActiveRepository(
+    name: string,
+    accessToken: string,
+    input: { branch: string; message: string },
+  ): Promise<SandboxPushedBranch> {
+    assertSafeBranch(input.branch);
+    if (!input.message.trim()) throw new SyntaxError("Commit message is required.");
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
+          'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
+          'git -C "$repo" checkout -B "$1"',
+          'git -C "$repo" add -A',
+          'if git -C "$repo" diff --cached --quiet; then exit 19; fi',
+          'git -C "$repo" commit -m "$2"',
+          'git -C "$repo" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin "HEAD:$1"',
+          'commit_sha="$(git -C "$repo" rev-parse HEAD)"',
+          'printf "%s\n%s\n%s\n%s\n" "$full_name" "$1" "$base_branch" "$commit_sha"',
+        ].join("\n"),
+        "commit-and-push",
+        input.branch,
+        input.message,
+      ],
+      cwd: sandboxConfig.cwd,
+      env: { GITHUB_TOKEN: accessToken },
+      timeoutMs: 120_000,
+    });
+    if (result.exitCode === 18) throw new RepositoryWorkspaceError();
+    if (result.exitCode === 19) throw new NoRepositoryChangesError();
+    return parsePushedBranch(await commandStdoutOrThrow(result, "Failed to push repository changes."));
   }
 
   async openTerminal(

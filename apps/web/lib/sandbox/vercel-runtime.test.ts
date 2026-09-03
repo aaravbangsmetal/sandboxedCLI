@@ -124,6 +124,167 @@ describe("VercelSandboxRuntime", () => {
     });
   });
 
+  it("clones a GitHub repository into the persistent sandbox workspace", async () => {
+    const sandbox = fakeSandbox();
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: null },
+      ),
+    ).resolves.toEqual({
+      fullName: "octocat/hello-world",
+      branch: "main",
+      directory: "/vercel/sandbox/repos/octocat__hello-world",
+      alreadyPresent: false,
+    });
+
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cmd: "sh",
+        env: { GITHUB_TOKEN: "gho_token" },
+        cwd: "/vercel/sandbox",
+      }),
+    );
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).toContain("active_repo_path");
+    expect(command.args.join(" ")).toContain("active_repo_full_name");
+    expect(command.args.join(" ")).toContain("active_repo_default_branch");
+  });
+
+  it("reports an already cloned repository without failing", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 17,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: "octocat@example.com" },
+      ),
+    ).resolves.toMatchObject({ alreadyPresent: true });
+  });
+
+  it("rejects unsafe branch names before running sandbox commands", async () => {
+    const sandbox = fakeSandbox();
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: null },
+        "../main",
+      ),
+    ).rejects.toThrow("Branch names may only contain safe Git ref characters.");
+    expect(sdk.getOrCreate).not.toHaveBeenCalled();
+  });
+
+  it("reads git status from the active sandbox repository", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "/vercel/sandbox/repos/octocat__hello-world\n## main...origin/main\n M README.md\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().gitStatus("sandboxed-cli-test")).resolves.toEqual({
+      repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+      output: "## main...origin/main\n M README.md\n",
+    });
+  });
+
+  it("reads a bounded git diff from the active sandbox repository", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "/vercel/sandbox/repos/octocat__hello-world\n README.md | 1 +\n+hello\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().gitDiff("sandboxed-cli-test")).resolves.toEqual({
+      repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+      output: " README.md | 1 +\n+hello\n",
+      truncated: false,
+    });
+  });
+
+  it("commits and pushes active repository changes to a sandbox branch", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () =>
+        "octocat/hello-world\nsandboxedcli/test-change\nmain\n0123456789abcdef0123456789abcdef01234567\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+      }),
+    ).resolves.toEqual({
+      fullName: "octocat/hello-world",
+      branch: "sandboxedcli/test-change",
+      baseBranch: "main",
+      commitSha: "0123456789abcdef0123456789abcdef01234567",
+    });
+
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cmd: "sh",
+        env: { GITHUB_TOKEN: "gho_token" },
+        cwd: "/vercel/sandbox",
+      }),
+    );
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).toContain("push origin");
+    expect(command.args.join(" ")).not.toContain("gho_token");
+  });
+
+  it("reports clean active repositories before trying to open delivery", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 19,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+      }),
+    ).rejects.toThrow("There are no repository changes to deliver.");
+  });
+
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {
     const running = fakeSandbox("running");
     const stopped = fakeSandbox("stopped");

@@ -71,11 +71,54 @@ export interface SandboxEnvironmentReport {
   checks: SandboxEnvironmentCheck[];
 }
 
+export interface SandboxRepositoryClone {
+  fullName: string;
+  branch: string;
+  directory: string;
+  alreadyPresent: boolean;
+}
+
+export interface SandboxGitStatus {
+  repositoryDirectory: string;
+  output: string;
+}
+
+export interface SandboxGitDiff {
+  repositoryDirectory: string;
+  output: string;
+  truncated: boolean;
+}
+
+export interface SandboxPushedBranch {
+  fullName: string;
+  branch: string;
+  baseBranch: string;
+  commitSha: string;
+}
+
 export interface SandboxRuntime {
   isConfigured(): boolean;
   getStatus(name: string): Promise<SandboxStatus>;
   ensureRunning(name: string): Promise<SandboxStatus>;
   checkEnvironment(name: string): Promise<SandboxEnvironmentReport>;
+  cloneRepository(
+    name: string,
+    repository: {
+      fullName: string;
+      cloneUrl: string;
+      defaultBranch: string;
+    },
+    accessToken: string,
+    user: { login: string; email: string | null },
+    branch?: string,
+  ): Promise<SandboxRepositoryClone>;
+  gitStatus(name: string): Promise<SandboxGitStatus>;
+  gitDiff(name: string): Promise<SandboxGitDiff>;
+  commitAndPushActiveRepository(
+    name: string,
+    accessToken: string,
+    input: { branch: string; message: string },
+  ): Promise<SandboxPushedBranch>;
   openTerminal(
     name: string,
     terminalId: string,

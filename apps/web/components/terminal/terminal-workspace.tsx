@@ -9,8 +9,10 @@ import type { TerminalTransport } from "@/lib/terminal/transport";
 import { VercelTerminalTransport } from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
+import { RepositoryPicker } from "./repository-picker";
 import { SandboxControls } from "./sandbox-controls";
 import { XtermPane } from "./xterm-pane";
+import { WorkspaceDelivery } from "./workspace-delivery";
 
 interface StoredTerminalTab {
   id: string;
@@ -64,12 +66,21 @@ export function TerminalWorkspace() {
   const tabButtons = useRef(new Map<string, HTMLButtonElement>());
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/sandbox/pause", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
+      localStorage.removeItem(STORAGE_KEY);
+      await Promise.allSettled([
+        fetch("/api/sandbox/pause", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+          keepalive: true,
+        }),
+        fetch("/api/auth/session", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+          keepalive: true,
+        }),
+      ]);
     } finally {
       router.replace("/");
     }
@@ -229,6 +240,7 @@ export function TerminalWorkspace() {
   return (
     <main className={styles.page}>
       <section className={styles.workspace} aria-label="Cloud terminal workspace">
+        <RepositoryPicker />
         <div className={styles.tabRow} role="tablist" aria-label="Open terminals" aria-orientation="horizontal">
           <div className={styles.tabs}>
             {tabs.map((tab) => (
@@ -284,6 +296,7 @@ export function TerminalWorkspace() {
           onResume={refreshTransports}
           onDestroy={destroyWorkspace}
         />
+        <WorkspaceDelivery />
 
         <footer className={styles.footer}>
           <span>$_X;</span>

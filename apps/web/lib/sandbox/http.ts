@@ -4,7 +4,13 @@ import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
 import {
+  AuthenticationRequiredError,
+} from "@/lib/auth/require-session";
+
+import {
   InvalidTerminalIdError,
+  NoRepositoryChangesError,
+  RepositoryWorkspaceError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
 } from "./errors";
@@ -17,6 +23,9 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
 }
 
 export function sandboxErrorResponse(error: unknown) {
+  if (error instanceof AuthenticationRequiredError) {
+    return sandboxJson({ error: error.message, code: "authentication_required" }, { status: 401 });
+  }
   if (error instanceof UnsafeSandboxRequestError) {
     return sandboxJson({ error: error.message, code: "unsafe_request" }, { status: 403 });
   }
@@ -28,6 +37,12 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof InvalidTerminalIdError || error instanceof SyntaxError) {
     return sandboxJson({ error: error.message, code: "invalid_request" }, { status: 400 });
+  }
+  if (error instanceof RepositoryWorkspaceError) {
+    return sandboxJson({ error: error.message, code: "repository_workspace_error" }, { status: 409 });
+  }
+  if (error instanceof NoRepositoryChangesError) {
+    return sandboxJson({ error: error.message, code: "no_repository_changes" }, { status: 409 });
   }
   if (error instanceof APIError) {
     const status = error.response.status >= 400 && error.response.status < 500 ? 409 : 502;
