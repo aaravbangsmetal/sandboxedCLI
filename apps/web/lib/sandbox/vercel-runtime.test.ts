@@ -233,6 +233,56 @@ describe("VercelSandboxRuntime", () => {
     });
   });
 
+  it("commits and pushes active repository changes to a sandbox branch", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () =>
+        "octocat/hello-world\nsandboxedcli/test-change\n0123456789abcdef0123456789abcdef01234567\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+      }),
+    ).resolves.toEqual({
+      fullName: "octocat/hello-world",
+      branch: "sandboxedcli/test-change",
+      commitSha: "0123456789abcdef0123456789abcdef01234567",
+    });
+
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cmd: "sh",
+        env: { GITHUB_TOKEN: "gho_token" },
+        cwd: "/vercel/sandbox",
+      }),
+    );
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).toContain("push origin");
+    expect(command.args.join(" ")).not.toContain("gho_token");
+  });
+
+  it("reports clean active repositories before trying to open delivery", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 19,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+      }),
+    ).rejects.toThrow("There are no repository changes to deliver.");
+  });
+
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {
     const running = fakeSandbox("running");
     const stopped = fakeSandbox("stopped");

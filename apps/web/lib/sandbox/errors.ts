@@ -20,3 +20,17 @@ export class InvalidTerminalIdError extends Error {
     this.name = "InvalidTerminalIdError";
   }
 }
+
+export class NoRepositoryChangesError extends Error {
+  constructor() {
+    super("There are no repository changes to deliver.");
+    this.name = "NoRepositoryChangesError";
+  }
+}
+
+export class RepositoryWorkspaceError extends Error {
+  constructor(message = "No active repository is ready in this sandbox.") {
+    super(message);
+    this.name = "RepositoryWorkspaceError";
+  }
+}

@@ -9,6 +9,8 @@ import {
 
 import {
   InvalidTerminalIdError,
+  NoRepositoryChangesError,
+  RepositoryWorkspaceError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
 } from "./errors";
@@ -35,6 +37,12 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof InvalidTerminalIdError || error instanceof SyntaxError) {
     return sandboxJson({ error: error.message, code: "invalid_request" }, { status: 400 });
+  }
+  if (error instanceof RepositoryWorkspaceError) {
+    return sandboxJson({ error: error.message, code: "repository_workspace_error" }, { status: 409 });
+  }
+  if (error instanceof NoRepositoryChangesError) {
+    return sandboxJson({ error: error.message, code: "no_repository_changes" }, { status: 409 });
   }
   if (error instanceof APIError) {
     const status = error.response.status >= 400 && error.response.status < 500 ? 409 : 502;
