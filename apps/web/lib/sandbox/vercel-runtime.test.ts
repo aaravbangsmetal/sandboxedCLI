@@ -33,7 +33,7 @@ function fakeSandbox(state: "running" | "stopped" = "running") {
     stop: vi.fn(async () => ({ snapshot: { id: "snapshot-1" } })),
     extendTimeout: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
-    runCommand: vi.fn(async () => ({ exitCode: 0, stderr: async () => "" })),
+    runCommand: vi.fn(async () => ({ exitCode: 0, stdout: async () => "", stderr: async () => "" })),
     writeFiles: vi.fn(async () => undefined),
   };
 }
@@ -82,6 +82,45 @@ describe("VercelSandboxRuntime", () => {
       args: expect.arrayContaining(["-A", "sc-terminal-one"]),
       cols: 120,
       rows: 40,
+    });
+    expect(connection.start.args).toContain("/vercel/sandbox/.sandboxedcli/bashrc");
+  });
+
+  it("reports sandbox image health from the baked environment command", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () =>
+        JSON.stringify({
+          status: "ok",
+          workspace: "/vercel/sandbox",
+          stateDirectory: "/vercel/sandbox/.sandboxedcli",
+          checks: [{ name: "version:codex", status: "ok", detail: "0.153.0" }],
+        }),
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().checkEnvironment("sandboxed-cli-test")).resolves.toMatchObject({
+      status: "ok",
+      workspace: "/vercel/sandbox",
+      checks: [{ name: "version:codex", status: "ok" }],
+    });
+    expect(sandbox.runCommand).toHaveBeenCalledWith("sh", expect.arrayContaining(["-lc"]));
+  });
+
+  it("degrades environment health when the custom health command is unavailable", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 127,
+      stdout: async () => "sandboxed-health missing",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().checkEnvironment("sandboxed-cli-test")).resolves.toMatchObject({
+      status: "degraded",
+      checks: [{ name: "sandboxed-health", status: "fail", detail: "sandboxed-health missing" }],
     });
   });
 

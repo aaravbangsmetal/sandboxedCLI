@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   PauseResult,
+  SandboxEnvironmentReport,
   SandboxRuntime,
   SandboxStatus,
   TerminalConnection,
@@ -14,7 +15,10 @@ import { SandboxNotConfiguredError, SandboxNotFoundError } from "./errors";
 import { tmuxSessionName } from "./terminal-id";
 
 const BASH_RC = `# Managed by sandboxed/cli
-export HISTFILE="${sandboxConfig.stateDirectory}/history"
+if [ -f /etc/profile.d/sandboxed-cli.sh ]; then
+  . /etc/profile.d/sandboxed-cli.sh
+fi
+export HISTFILE="${sandboxConfig.stateDirectory}/history/bash_history"
 export HISTSIZE=10000
 export HISTFILESIZE=20000
 shopt -s histappend
@@ -22,6 +26,40 @@ PROMPT_COMMAND="history -a; history -n"
 PS1=">_ "
 cd "${sandboxConfig.cwd}"
 `;
+
+function degradedEnvironmentReport(detail: string): SandboxEnvironmentReport {
+  return {
+    status: "degraded",
+    workspace: sandboxConfig.cwd,
+    stateDirectory: sandboxConfig.stateDirectory,
+    image: sandboxConfig.image,
+    checks: [{ name: "sandboxed-health", status: "fail", detail }],
+  };
+}
+
+function parseEnvironmentReport(stdout: string): SandboxEnvironmentReport {
+  const parsed = JSON.parse(stdout) as Partial<SandboxEnvironmentReport>;
+  return {
+    status: parsed.status === "ok" || parsed.status === "fail" ? parsed.status : "degraded",
+    workspace: typeof parsed.workspace === "string" ? parsed.workspace : sandboxConfig.cwd,
+    stateDirectory:
+      typeof parsed.stateDirectory === "string" ? parsed.stateDirectory : sandboxConfig.stateDirectory,
+    image: sandboxConfig.image,
+    checks: Array.isArray(parsed.checks)
+      ? parsed.checks
+          .filter((check) => {
+            if (!check || typeof check !== "object") return false;
+            const candidate = check as Record<string, unknown>;
+            return (
+              typeof candidate.name === "string" &&
+              (candidate.status === "ok" || candidate.status === "fail") &&
+              typeof candidate.detail === "string"
+            );
+          })
+          .map((check) => check as SandboxEnvironmentReport["checks"][number])
+      : [],
+  };
+}
 
 function isNotFound(error: unknown) {
   return error instanceof APIError && error.response.status === 404;
@@ -122,6 +160,21 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       onResume: ensureWorkspaceFiles,
     });
     return toStatus(sandbox);
+  }
+
+  async checkEnvironment(name: string) {
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand("sh", [
+      "-lc",
+      "if command -v sandboxed-health >/dev/null 2>&1; then sandboxed-health --json; else printf '%s' 'sandboxed-health missing'; exit 127; fi",
+    ]);
+    const stdout = await result.stdout();
+    if (result.exitCode === 127) return degradedEnvironmentReport(stdout || "missing");
+    if (result.exitCode !== 0) {
+      const stderr = await result.stderr();
+      throw new Error(stderr || stdout || "Sandbox environment health check failed.");
+    }
+    return parseEnvironmentReport(stdout);
   }
 
   async openTerminal(
