@@ -6,6 +6,7 @@ FROM ${BASE_IMAGE}
 ARG UBUNTU_SNAPSHOT=20260831T000000Z
 ARG NODE_VERSION=24.20.0
 ARG NODE_SHA256=2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2
+ARG PNPM_VERSION=11.25.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -78,6 +79,10 @@ RUN curl --fail --silent --show-error --location \
     && tar --extract --xz --file /tmp/node.tar.xz --directory /usr/local --strip-components=1 \
     && rm /tmp/node.tar.xz \
     && test "$(node --version)" = "v${NODE_VERSION}"
+
+RUN npm install --global --no-audit --no-fund "pnpm@${PNPM_VERSION}" \
+    && test "$(pnpm --version)" = "${PNPM_VERSION}" \
+    && npm cache clean --force
 
 WORKDIR /vercel/sandbox
 USER vercel-sandbox
