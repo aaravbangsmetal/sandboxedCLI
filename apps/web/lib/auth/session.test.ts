@@ -1,55 +1,66 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  createOAuthState,
-  openGitHubSession,
-  sealGitHubSession,
-  verifyOAuthState,
-  type GitHubSession,
-} from "./session";
+const auth = vi.hoisted(() => ({ getUser: vi.fn(), signOut: vi.fn() }));
+const connections = vi.hoisted(() => ({ getGitHubConnection: vi.fn() }));
 
-const session: GitHubSession = {
-  accessToken: "gho_test-token",
-  scope: "read:user user:email repo",
-  tokenType: "bearer",
-  user: {
-    id: 123,
-    login: "octocat",
-    name: "The Octocat",
-    avatarUrl: "https://github.com/images/error/octocat_happy.gif",
-    htmlUrl: "https://github.com/octocat",
-    email: "octocat@example.com",
-  },
-  createdAt: 1_000,
-  expiresAt: 10_000,
-};
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: vi.fn(async () => ({ auth })),
+}));
+vi.mock("./github-connection", () => connections);
 
-function tamperMiddle(value: string) {
-  const index = Math.floor(value.length / 2);
-  const replacement = value[index] === "a" ? "b" : "a";
-  return `${value.slice(0, index)}${replacement}${value.slice(index + 1)}`;
-}
+import { clearGitHubSession, getGitHubSession } from "./session";
 
-describe("GitHub session sealing", () => {
-  it("round-trips an encrypted session before expiry", () => {
-    const sealed = sealGitHubSession(session);
+describe("Supabase-backed GitHub session", () => {
+  beforeEach(() => vi.clearAllMocks());
 
-    expect(sealed).not.toContain(session.accessToken);
-    expect(openGitHubSession(sealed, 2_000)).toEqual(session);
+  it("joins the verified Supabase user with persisted GitHub access", async () => {
+    auth.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "supabase-user-id",
+          created_at: "2026-09-01T10:00:00.000Z",
+          last_sign_in_at: "2026-09-04T12:00:00.000Z",
+        },
+      },
+      error: null,
+    });
+    connections.getGitHubConnection.mockResolvedValue({
+      accessToken: "gho_token",
+      scope: "repo",
+      tokenType: "bearer",
+      connectedAt: "2026-09-01T10:00:00.000Z",
+      user: { login: "octocat" },
+    });
+
+    await expect(getGitHubSession()).resolves.toMatchObject({
+      accessToken: "gho_token",
+      user: { login: "octocat" },
+      account: {
+        id: "supabase-user-id",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        lastSignInAt: "2026-09-04T12:00:00.000Z",
+      },
+    });
   });
 
-  it("rejects tampered or expired sessions", () => {
-    const sealed = sealGitHubSession(session);
-    const tampered = tamperMiddle(sealed);
-
-    expect(openGitHubSession(tampered, 2_000)).toBeNull();
-    expect(openGitHubSession(sealed, 10_000)).toBeNull();
+  it("rejects an unverified or missing Supabase user", async () => {
+    auth.getUser.mockResolvedValue({ data: { user: null }, error: new Error("invalid jwt") });
+    await expect(getGitHubSession()).resolves.toBeNull();
+    expect(connections.getGitHubConnection).not.toHaveBeenCalled();
   });
 
-  it("creates verifiable OAuth state values", () => {
-    const state = createOAuthState();
+  it("requires a persisted GitHub connection", async () => {
+    auth.getUser.mockResolvedValue({
+      data: { user: { id: "supabase-user-id", created_at: "2026-09-01T10:00:00.000Z" } },
+      error: null,
+    });
+    connections.getGitHubConnection.mockResolvedValue(null);
+    await expect(getGitHubSession()).resolves.toBeNull();
+  });
 
-    expect(verifyOAuthState(state)).toBe(true);
-    expect(verifyOAuthState(tamperMiddle(state))).toBe(false);
+  it("signs out only the current Supabase session", async () => {
+    auth.signOut.mockResolvedValue({ error: null });
+    await clearGitHubSession();
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 });

@@ -18,7 +18,13 @@ describe("/api/auth/session", () => {
     authSession.getGitHubSession.mockResolvedValue({
       accessToken: "gho_token",
       scope: "repo",
+      connectedAt: "2026-09-01T10:00:00.000Z",
       user: { login: "octocat" },
+      account: {
+        id: "supabase-user-id",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        lastSignInAt: "2026-09-04T12:00:00.000Z",
+      },
     });
 
     const response = await GET();
@@ -27,6 +33,12 @@ describe("/api/auth/session", () => {
       authenticated: true,
       user: { login: "octocat" },
       scope: "repo",
+      connectedAt: "2026-09-01T10:00:00.000Z",
+      account: {
+        id: "supabase-user-id",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        lastSignInAt: "2026-09-04T12:00:00.000Z",
+      },
     });
   });
 

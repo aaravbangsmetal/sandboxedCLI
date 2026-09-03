@@ -1,10 +1,12 @@
 # sandboxed/cli
 
-A browser terminal backed by a real [Vercel Sandbox](https://vercel.com/docs/sandbox). The `backend` branch adds GitHub OAuth, repository access, sandbox cloning, git status/diff review, branch push, and pull-request creation on top of the sandbox and environment phases.
+A browser terminal backed by a real [Vercel Sandbox](https://vercel.com/docs/sandbox). Supabase Auth owns persistent GitHub login and user history, while the backend uses the granted GitHub access to clone repositories, review changes, push branches, and create pull requests from the sandbox.
 
 ## What is real on `backend`
 
-- GitHub OAuth creates an encrypted, HttpOnly session cookie; browser code never receives the access token.
+- GitHub OAuth runs through Supabase Auth using its cookie-based PKCE session; browser code never receives the GitHub access token.
+- Supabase records each user, account creation time, and last sign-in time in `auth.users`.
+- Because Supabase intentionally does not retain provider tokens, the callback encrypts the GitHub token and stores it in a service-role-only `github_connections` row keyed by the Supabase user ID.
 - Authenticated users can list repositories available to the granted OAuth scope.
 - Selected repositories are cloned inside the persistent sandbox with a transient GitHub token passed only to the server-side sandbox command environment.
 - A named persistent sandbox is created or resumed for each signed workspace.
@@ -35,13 +37,20 @@ cd apps/web
 vercel link
 vercel env pull .env.local
 openssl rand -base64 32 # place the result in SANDBOX_SESSION_SECRET
-openssl rand -base64 32 # place the result in GITHUB_SESSION_SECRET
+openssl rand -base64 32 # place the result in GITHUB_TOKEN_ENCRYPTION_KEY
 pnpm dev
 ```
 
 Vercel deployments receive `VERCEL_OIDC_TOKEN` automatically. Outside that environment, configure either the OIDC token or all of `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID`. See [`apps/web/.env.example`](apps/web/.env.example).
 
-GitHub OAuth requires an OAuth App with callback URL `http://localhost:3000/api/auth/github/callback` locally, or the matching production URL. The current default scope is `read:user user:email repo` so the app can clone and push private repositories when the user grants access.
+Create a Supabase project, copy its project URL, publishable key, and service-role key into the server environment, then apply [`supabase/migrations/0001_github_connections.sql`](supabase/migrations/0001_github_connections.sql). In Supabase Authentication:
+
+1. Enable the GitHub provider and put the GitHub OAuth App client ID and secret there, not in this application's environment.
+2. Set the GitHub OAuth App callback to the Supabase callback shown by the provider panel, normally `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. Add `http://localhost:3000/api/auth/github/callback` and the production equivalent to Supabase's redirect allow list.
+4. Set the Supabase Site URL to the production application origin.
+
+The app's `/auth` screen redirects into this flow directly; it does not render a Supabase-hosted login page. The current default GitHub scope is `read:user user:email repo`, allowing private repository clone and push after the user grants access. A normal returning browser session refreshes through Supabase and reuses the encrypted connection. Explicit logout ends the current Supabase session but retains the connection record; the next explicit login refreshes that record with the newest provider token.
 
 The default image on `envs` is `sandboxed-cli-agent:dev`. Build it from [`environments/agent/Dockerfile`](environments/agent/Dockerfile), publish it to Vercel Container Registry, then set `SANDBOX_IMAGE` to the ready repository tag printed by [`environments/agent/scripts/publish-vcr.sh`](environments/agent/scripts/publish-vcr.sh). See [`environments/agent/README.md`](environments/agent/README.md) for the full environment contract.
 
@@ -61,17 +70,17 @@ Interactive controller tokens are returned with `Cache-Control: no-store`, used 
 
 ## GitHub API
 
-All authenticated GitHub routes require the sealed session cookie created by `/api/auth/github/callback`. All mutating routes also require same-origin `application/json` requests.
+All authenticated GitHub routes require a verified Supabase user plus that user's encrypted GitHub connection. All mutating routes also require same-origin `application/json` requests.
 
-- `GET /api/auth/session` — return session presence and the GitHub viewer profile, without the access token.
-- `DELETE /api/auth/session` — clear the encrypted GitHub session cookie.
+- `GET /api/auth/session` — return session presence, account timestamps, and the GitHub viewer profile, without the access token.
+- `DELETE /api/auth/session` — sign out the current Supabase session without deleting the durable encrypted provider connection.
 - `GET /api/github/repos` — list repositories visible to the OAuth token.
 - `POST /api/github/repos/clone` with `{ "fullName": "owner/repo" }` — clone the selected repository into the persistent sandbox and mark it active.
 - `GET /api/github/workspace` — read `git status --short --branch` for the active sandbox repository.
 - `GET /api/github/workspace/diff` — read a bounded text diff for review.
 - `POST /api/github/workspace/pr` with `{ "title": "...", "body": "..." }` — commit active changes, push a sandbox branch, and open a pull request.
 
-The server stores only sealed session data in cookies and active repository metadata inside the sandbox filesystem. The OAuth token is used server-side for GitHub API calls and passed into sandbox git commands through process environment, not shell arguments.
+Supabase stores refreshable auth state in secure cookies. The server decrypts the provider token only when a GitHub operation needs it, and passes it into sandbox git commands through process environment rather than shell arguments. The service-role key and provider token are never returned to browser code.
 
 ## Verification
 

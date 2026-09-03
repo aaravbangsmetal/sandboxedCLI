@@ -1,44 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.hoisted(() => {
-  process.env.GITHUB_CLIENT_ID = "client-id";
-});
-
 import {
   createGitHubPullRequest,
-  exchangeGitHubCode,
   fetchGitHubViewer,
-  githubAuthorizeUrl,
   listGitHubRepositories,
 } from "./client";
 
 describe("GitHub client", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it("creates an OAuth authorization URL with state and scopes", () => {
-    const url = new URL(githubAuthorizeUrl("state-token"));
-
-    expect(url.origin).toBe("https://github.com");
-    expect(url.searchParams.get("client_id")).toBe("client-id");
-    expect(url.searchParams.get("state")).toBe("state-token");
-    expect(url.searchParams.get("scope")).toContain("repo");
-  });
-
-  it("exchanges an OAuth code for a token", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json({ access_token: "gho_token", scope: "repo", token_type: "bearer" }),
-      ),
-    );
-
-    await expect(exchangeGitHubCode("code")).resolves.toEqual({
-      accessToken: "gho_token",
-      scope: "repo",
-      tokenType: "bearer",
-    });
   });
 
   it("normalizes viewer and repository responses", async () => {

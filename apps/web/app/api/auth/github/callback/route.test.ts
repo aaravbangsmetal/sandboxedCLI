@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const authSession = vi.hoisted(() => ({
-  consumeOAuthStateCookie: vi.fn(),
-  setGitHubSession: vi.fn(),
-  verifyOAuthState: vi.fn(),
-}));
+const auth = vi.hoisted(() => ({ exchangeCodeForSession: vi.fn() }));
+const connection = vi.hoisted(() => ({ saveGitHubConnection: vi.fn() }));
+const github = vi.hoisted(() => ({ fetchGitHubViewer: vi.fn() }));
 
-const github = vi.hoisted(() => ({
-  exchangeGitHubCode: vi.fn(),
-  fetchGitHubViewer: vi.fn(),
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: vi.fn(async () => ({ auth })),
 }));
-
-vi.mock("@/lib/auth/config", () => ({
-  githubAuthConfig: { sessionMaxAgeSeconds: 60 },
-}));
-vi.mock("@/lib/auth/session", () => authSession);
+vi.mock("@/lib/auth/github-connection", () => connection);
 vi.mock("@/lib/github/client", () => github);
 
 import { GET } from "./route";
@@ -22,48 +15,61 @@ import { GET } from "./route";
 describe("GET /api/auth/github/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authSession.consumeOAuthStateCookie.mockResolvedValue("state-token");
-    authSession.verifyOAuthState.mockReturnValue(true);
-    github.exchangeGitHubCode.mockResolvedValue({
-      accessToken: "gho_token",
-      scope: "repo",
-      tokenType: "bearer",
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: {
+        user: { id: "supabase-user-id" },
+        session: { provider_token: "gho_token" },
+      },
+      error: null,
     });
     github.fetchGitHubViewer.mockResolvedValue({
-      id: 1,
+      id: 42,
       login: "octocat",
-      name: null,
-      avatarUrl: "https://avatars.githubusercontent.com/u/1",
+      name: "The Octocat",
+      avatarUrl: "https://avatars.example/octocat",
       htmlUrl: "https://github.com/octocat",
       email: "octocat@example.com",
     });
   });
 
-  it("creates a sealed session and redirects into setup", async () => {
+  it("exchanges the PKCE code and persists GitHub access for the Supabase user", async () => {
     const response = await GET(
-      new Request("https://sandboxedcli.xyz/api/auth/github/callback?code=abc&state=state-token"),
+      new Request("https://sandboxedcli.xyz/api/auth/github/callback?code=supabase-pkce-code"),
     );
 
-    expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://sandboxedcli.xyz/setup");
-    expect(authSession.setGitHubSession).toHaveBeenCalledWith(
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledWith("supabase-pkce-code");
+    expect(connection.saveGitHubConnection).toHaveBeenCalledWith(
+      "supabase-user-id",
       expect.objectContaining({
         accessToken: "gho_token",
-        user: expect.objectContaining({ login: "octocat", email: "octocat@example.com" }),
+        scope: "read:user user:email repo",
+        user: expect.objectContaining({ login: "octocat" }),
       }),
     );
   });
 
-  it("rejects missing or mismatched OAuth state", async () => {
-    authSession.consumeOAuthStateCookie.mockResolvedValue("different-state");
-
+  it("rejects callbacks without an authorization code", async () => {
     const response = await GET(
-      new Request("https://sandboxedcli.xyz/api/auth/github/callback?code=abc&state=state-token"),
+      new Request("https://sandboxedcli.xyz/api/auth/github/callback?error=access_denied"),
     );
-
     expect(response.headers.get("location")).toBe(
-      "https://sandboxedcli.xyz/auth?error=github_state_invalid",
+      "https://sandboxedcli.xyz/auth?error=github_code_missing",
     );
-    expect(authSession.setGitHubSession).not.toHaveBeenCalled();
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects sessions without GitHub provider access", async () => {
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { user: { id: "supabase-user-id" }, session: {} },
+      error: null,
+    });
+    const response = await GET(
+      new Request("https://sandboxedcli.xyz/api/auth/github/callback?code=supabase-pkce-code"),
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://sandboxedcli.xyz/auth?error=github_exchange_failed",
+    );
+    expect(connection.saveGitHubConnection).not.toHaveBeenCalled();
   });
 });

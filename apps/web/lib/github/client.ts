@@ -37,14 +37,6 @@ export interface GitHubPullRequest {
   title: string;
 }
 
-interface OAuthTokenResponse {
-  access_token?: unknown;
-  scope?: unknown;
-  token_type?: unknown;
-  error?: unknown;
-  error_description?: unknown;
-}
-
 interface GitHubUserResponse {
   id?: unknown;
   login?: unknown;
@@ -116,47 +108,6 @@ async function githubJson<T>(url: string, init: RequestInit = {}) {
   }
   if (!body) throw new GitHubApiError("GitHub returned an empty response.", response.status);
   return body;
-}
-
-export function githubAuthorizeUrl(state: string) {
-  const params = new URLSearchParams({
-    client_id: githubAuthConfig.clientId,
-    scope: githubAuthConfig.scope,
-    state,
-  });
-  if (githubAuthConfig.callbackUrl) params.set("redirect_uri", githubAuthConfig.callbackUrl);
-  return `https://github.com/login/oauth/authorize?${params.toString()}`;
-}
-
-export async function exchangeGitHubCode(code: string) {
-  const body = await githubJson<OAuthTokenResponse>("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      client_id: githubAuthConfig.clientId,
-      client_secret: githubAuthConfig.clientSecret,
-      code,
-      ...(githubAuthConfig.callbackUrl ? { redirect_uri: githubAuthConfig.callbackUrl } : {}),
-    }),
-  });
-
-  if (typeof body.error === "string") {
-    throw new GitHubApiError(
-      typeof body.error_description === "string" ? body.error_description : body.error,
-      401,
-    );
-  }
-  if (typeof body.access_token !== "string") {
-    throw new GitHubApiError("GitHub did not return an access token.", 502);
-  }
-  return {
-    accessToken: body.access_token,
-    scope: typeof body.scope === "string" ? body.scope : "",
-    tokenType: typeof body.token_type === "string" ? body.token_type : "bearer",
-  };
 }
 
 function normalizeViewer(user: GitHubUserResponse, email: string | null): GitHubViewer {

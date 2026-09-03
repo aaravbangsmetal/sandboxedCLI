@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { githubAuthConfig } from "@/lib/auth/config";
-import {
-  consumeOAuthStateCookie,
-  setGitHubSession,
-  verifyOAuthState,
-  type GitHubSession,
-} from "@/lib/auth/session";
-import { exchangeGitHubCode, fetchGitHubViewer } from "@/lib/github/client";
+import { saveGitHubConnection } from "@/lib/auth/github-connection";
+import { fetchGitHubViewer } from "@/lib/github/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function redirectTo(path: string, request: Request) {
-  return NextResponse.redirect(new URL(path, request.url));
-}
 
 function redirectWithError(error: string, request: Request) {
   const url = new URL("/auth", request.url);
@@ -23,23 +15,22 @@ function redirectWithError(error: string, request: Request) {
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
-  const storedState = await consumeOAuthStateCookie();
-
-  if (!code || !state || !storedState || state !== storedState || !verifyOAuthState(state)) {
-    return redirectWithError("github_state_invalid", request);
-  }
+  const code = new URL(request.url).searchParams.get("code");
+  if (!code) return redirectWithError("github_code_missing", request);
 
   try {
-    const token = await exchangeGitHubCode(code);
-    const viewer = await fetchGitHubViewer(token.accessToken);
-    const createdAt = Date.now();
-    const session: GitHubSession = {
-      accessToken: token.accessToken,
-      scope: token.scope,
-      tokenType: token.tokenType,
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    if (!data.user || !data.session?.provider_token) {
+      throw new Error("GitHub did not return provider access.");
+    }
+
+    const viewer = await fetchGitHubViewer(data.session.provider_token);
+    await saveGitHubConnection(data.user.id, {
+      accessToken: data.session.provider_token,
+      scope: githubAuthConfig.scope,
+      tokenType: "bearer",
       user: {
         id: viewer.id,
         login: viewer.login,
@@ -48,11 +39,8 @@ export async function GET(request: Request) {
         htmlUrl: viewer.htmlUrl,
         email: viewer.email,
       },
-      createdAt,
-      expiresAt: createdAt + githubAuthConfig.sessionMaxAgeSeconds * 1_000,
-    };
-    await setGitHubSession(session);
-    return redirectTo("/setup", request);
+    });
+    return NextResponse.redirect(new URL("/setup", request.url));
   } catch {
     return redirectWithError("github_exchange_failed", request);
   }
