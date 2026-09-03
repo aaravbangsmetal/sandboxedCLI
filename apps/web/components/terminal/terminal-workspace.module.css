@@ -115,6 +115,56 @@
   display: none;
 }
 
+.lifecycleBar {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 8px 18px 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+}
+
+.lifecycleBar button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lifecycleBar button:hover,
+.lifecycleBar button:focus-visible {
+  color: var(--color-accent);
+}
+
+.lifecycleBar button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.lifecycleBar button:disabled {
+  color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.lifecycleStatus {
+  margin-right: auto;
+}
+
+.statusOnline {
+  color: #2f9365;
+  margin-right: 6px;
+}
+
+.statusOffline {
+  color: var(--color-text-muted);
+  margin-right: 6px;
+}
+
 .footer {
   display: grid;
   grid-template-columns: auto 1.55fr 1.12fr 1.3fr auto;
@@ -188,6 +238,21 @@
     padding-inline: 8px;
     font-size: var(--font-size-secondary);
     white-space: normal;
+  }
+
+  .lifecycleBar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px 14px;
+    padding-inline: 8px;
+  }
+
+  .lifecycleStatus {
+    flex: 1 0 100%;
+  }
+
+  .persistenceNote {
+    display: none;
   }
 
   .footer > :nth-child(1) {

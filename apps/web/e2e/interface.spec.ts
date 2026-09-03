@@ -2,6 +2,25 @@ import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/sandbox", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          configured: true,
+          sandbox: {
+            name: "sandboxed-cli-e2e",
+            state: "running",
+            persistent: true,
+            filesystemPreserved: true,
+            processMemoryPreserved: false,
+          },
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
 });
 
 test("completes the landing, authentication, setup, and terminal flow", async ({ page }) => {
@@ -12,7 +31,7 @@ test("completes the landing, authentication, setup, and terminal flow", async ({
   await expect(page).toHaveURL(/\/setup$/, { timeout: 2_000 });
   await expect(page.getByText(">_sandbox_init!", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/terminal$/, { timeout: 2_000 });
-  await expect(page.getByRole("region", { name: /interactive mock terminal/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: /interactive cloud terminal/ })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("button", { name: "get started" })).toBeVisible();
 });

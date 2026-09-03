@@ -10,6 +10,22 @@ const routes = [
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/sandbox", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        sandbox: {
+          name: "sandboxed-cli-e2e",
+          state: "running",
+          persistent: true,
+          filesystemPreserved: true,
+          processMemoryPreserved: false,
+        },
+      }),
+    });
+  });
 });
 
 for (const [name, route, marker] of routes) {
