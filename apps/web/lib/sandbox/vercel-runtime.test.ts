@@ -155,6 +155,7 @@ describe("VercelSandboxRuntime", () => {
     );
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).toContain("active_repo_path");
   });
 
   it("reports an already cloned repository without failing", async () => {

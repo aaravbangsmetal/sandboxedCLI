@@ -26,7 +26,16 @@ export HISTFILESIZE=20000
 shopt -s histappend
 PROMPT_COMMAND="history -a; history -n"
 PS1=">_ "
-cd "${sandboxConfig.cwd}"
+if [ -f "${sandboxConfig.stateDirectory}/active_repo_path" ]; then
+  repo_path="$(cat "${sandboxConfig.stateDirectory}/active_repo_path")"
+  if [ -d "$repo_path/.git" ]; then
+    cd "$repo_path"
+  else
+    cd "${sandboxConfig.cwd}"
+  fi
+else
+  cd "${sandboxConfig.cwd}"
+fi
 `;
 
 const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -246,6 +255,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'git -C "$3" config user.name "$4"',
           'git -C "$3" config user.email "$5"',
           'git -C "$3" config pull.rebase false',
+          'printf "%s\n" "$3" > "/vercel/sandbox/.sandboxedcli/active_repo_path"',
         ].join("\n"),
         "clone-repository",
         branch,

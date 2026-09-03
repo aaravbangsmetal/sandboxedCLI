@@ -24,6 +24,12 @@ const session: GitHubSession = {
   expiresAt: 10_000,
 };
 
+function tamperMiddle(value: string) {
+  const index = Math.floor(value.length / 2);
+  const replacement = value[index] === "a" ? "b" : "a";
+  return `${value.slice(0, index)}${replacement}${value.slice(index + 1)}`;
+}
+
 describe("GitHub session sealing", () => {
   it("round-trips an encrypted session before expiry", () => {
     const sealed = sealGitHubSession(session);
@@ -34,7 +40,7 @@ describe("GitHub session sealing", () => {
 
   it("rejects tampered or expired sessions", () => {
     const sealed = sealGitHubSession(session);
-    const tampered = `${sealed.slice(0, -1)}x`;
+    const tampered = tamperMiddle(sealed);
 
     expect(openGitHubSession(tampered, 2_000)).toBeNull();
     expect(openGitHubSession(sealed, 10_000)).toBeNull();
@@ -44,6 +50,6 @@ describe("GitHub session sealing", () => {
     const state = createOAuthState();
 
     expect(verifyOAuthState(state)).toBe(true);
-    expect(verifyOAuthState(`${state.slice(0, -1)}x`)).toBe(false);
+    expect(verifyOAuthState(tamperMiddle(state))).toBe(false);
   });
 });
