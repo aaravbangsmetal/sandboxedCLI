@@ -9,6 +9,7 @@ import type { TerminalTransport } from "@/lib/terminal/transport";
 import { VercelTerminalTransport } from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
+import { SandboxControls } from "./sandbox-controls";
 import { XtermPane } from "./xterm-pane";
 
 interface StoredTerminalTab {
@@ -76,6 +77,24 @@ export function TerminalWorkspace() {
   const [tabs, setTabs] = useState<TerminalTab[]>(() => [materialize(DEFAULT_TAB)]);
   const [activeId, setActiveId] = useState<string>(DEFAULT_TAB.id);
   const [hydrated, setHydrated] = useState(false);
+
+  const refreshTransports = useCallback(() => {
+    setTabs((current) =>
+      current.map((tab) => {
+        tab.transport.dispose();
+        return { ...tab, transport: createTransport(tab.id) };
+      }),
+    );
+  }, [createTransport]);
+
+  const pauseTransports = useCallback(() => {
+    tabs.forEach((tab) => tab.transport.dispose());
+  }, [tabs]);
+
+  const destroyWorkspace = useCallback(() => {
+    tabs.forEach((tab) => tab.transport.dispose());
+    router.replace("/");
+  }, [router, tabs]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -248,6 +267,12 @@ export function TerminalWorkspace() {
           </div>
         ))}
         {!hydrated && <div className={styles.terminalPanel} aria-label="Loading cloud terminal" />}
+
+        <SandboxControls
+          onPause={pauseTransports}
+          onResume={refreshTransports}
+          onDestroy={destroyWorkspace}
+        />
 
         <footer className={styles.footer}>
           <span>$_X;</span>
