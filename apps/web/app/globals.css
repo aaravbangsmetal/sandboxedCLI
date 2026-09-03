@@ -1,0 +1,71 @@
+@font-face {
+  font-family: "Cascadia Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/cascadia-mono-latin-400-normal.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: light;
+
+  --color-canvas: #ffffff;
+  --color-terminal-panel: #f8f8f8;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #7d7d7d;
+  --color-text-muted: #a2a2a2;
+  --color-border: #dedede;
+  --color-accent: #438ed6;
+
+  --font-mono: "Cascadia Mono", "Cascadia Code", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-size-base: 16px;
+  --font-size-secondary: 14px;
+  --line-height-base: 1.35;
+  --terminal-radius: 27px;
+  --terminal-width: min(840px, calc(100vw - 32px));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  font-synthesis: none;
+  font-weight: 400;
+  line-height: var(--line-height-base);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 3px;
+}
