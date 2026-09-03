@@ -157,6 +157,7 @@ describe("VercelSandboxRuntime", () => {
     expect(command.args.join(" ")).not.toContain("gho_token");
     expect(command.args.join(" ")).toContain("active_repo_path");
     expect(command.args.join(" ")).toContain("active_repo_full_name");
+    expect(command.args.join(" ")).toContain("active_repo_default_branch");
   });
 
   it("reports an already cloned repository without failing", async () => {
@@ -238,7 +239,7 @@ describe("VercelSandboxRuntime", () => {
     sandbox.runCommand.mockResolvedValueOnce({
       exitCode: 0,
       stdout: async () =>
-        "octocat/hello-world\nsandboxedcli/test-change\n0123456789abcdef0123456789abcdef01234567\n",
+        "octocat/hello-world\nsandboxedcli/test-change\nmain\n0123456789abcdef0123456789abcdef01234567\n",
       stderr: async () => "",
     });
     sdk.get.mockResolvedValueOnce(sandbox);
@@ -251,6 +252,7 @@ describe("VercelSandboxRuntime", () => {
     ).resolves.toEqual({
       fullName: "octocat/hello-world",
       branch: "sandboxedcli/test-change",
+      baseBranch: "main",
       commitSha: "0123456789abcdef0123456789abcdef01234567",
     });
 

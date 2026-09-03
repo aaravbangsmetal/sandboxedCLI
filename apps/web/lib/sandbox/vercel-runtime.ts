@@ -128,11 +128,11 @@ function splitRepositoryCommandOutput(output: string) {
 }
 
 function parsePushedBranch(output: string): SandboxPushedBranch {
-  const [fullName, branch, commitSha] = output.trim().split("\n");
+  const [fullName, branch, baseBranch, commitSha] = output.trim().split("\n");
   if (!fullName || !branch || !/^[a-f0-9]{40}$/.test(commitSha || "")) {
     throw new RepositoryWorkspaceError("Sandbox did not return pushed branch metadata.");
   }
-  return { fullName, branch, commitSha };
+  return { fullName, branch, baseBranch: baseBranch || "main", commitSha };
 }
 
 function isNotFound(error: unknown) {
@@ -292,6 +292,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'git -C "$3" config pull.rebase false',
           'printf "%s\n" "$3" > "/vercel/sandbox/.sandboxedcli/active_repo_path"',
           'printf "%s\n" "$6" > "/vercel/sandbox/.sandboxedcli/active_repo_full_name"',
+          'printf "%s\n" "$7" > "/vercel/sandbox/.sandboxedcli/active_repo_default_branch"',
         ].join("\n"),
         "clone-repository",
         branch,
@@ -300,6 +301,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         user.login,
         email,
         repository.fullName,
+        repository.defaultBranch,
       ],
       cwd: sandboxConfig.cwd,
       env: { GITHUB_TOKEN: accessToken },
@@ -380,6 +382,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'set -euo pipefail',
           'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
           'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
+          'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
           'test -d "$repo/.git"',
           'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
@@ -389,7 +392,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'git -C "$repo" commit -m "$2"',
           'git -C "$repo" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin "HEAD:$1"',
           'commit_sha="$(git -C "$repo" rev-parse HEAD)"',
-          'printf "%s\n%s\n%s\n" "$full_name" "$1" "$commit_sha"',
+          'printf "%s\n%s\n%s\n%s\n" "$full_name" "$1" "$base_branch" "$commit_sha"',
         ].join("\n"),
         "commit-and-push",
         input.branch,

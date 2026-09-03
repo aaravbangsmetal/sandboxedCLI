@@ -92,6 +92,7 @@ export interface SandboxGitDiff {
 export interface SandboxPushedBranch {
   fullName: string;
   branch: string;
+  baseBranch: string;
   commitSha: string;
 }
 
