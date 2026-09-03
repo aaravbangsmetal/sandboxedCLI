@@ -19,8 +19,11 @@ The working directory is `/vercel/sandbox`. The image creates `/vercel/sandbox/.
 - `cache/npm`
 - `logs`
 - `pnpm`
+- `agents/codex` (`CODEX_HOME`, including Codex login state)
+- `agents/claude` (`CLAUDE_CONFIG_DIR`, including Claude Code login state)
+- `agents/xdg-config` and `agents/xdg-data` (OpenCode configuration, credentials, and sessions)
 
-Running processes and RAM still disappear when the VM stops. `tmux` preserves interactive sessions only while the VM is running; durable process replay belongs in the later backend/event layer.
+Running processes and RAM still disappear when the VM stops. `tmux` preserves interactive sessions only while the VM is running. Agent credentials and on-disk session data survive snapshots through their managed state directories, but an actively running agent process cannot resume after a VM stop.
 
 ## Local validation
 

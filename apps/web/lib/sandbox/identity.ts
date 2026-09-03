@@ -1,10 +1,11 @@
 import "server-only";
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
+import { requireGitHubSession } from "@/lib/auth/require-session";
+
 const COOKIE_NAME = "sandboxedcli_workspace";
-const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const WORKSPACE_ID_PATTERN = /^[a-f0-9]{64}$/;
 
 export interface WorkspaceIdentity {
@@ -48,31 +49,22 @@ export function deriveSandboxName(workspaceId: string) {
   return `sandboxed-cli-${opaqueId}`;
 }
 
+export function deriveUserWorkspaceId(userId: string) {
+  if (!userId.trim()) throw new Error("A Supabase user ID is required.");
+  return createHmac("sha256", sessionSecret()).update(`user:${userId}`).digest("hex");
+}
+
 function toIdentity(id: string): WorkspaceIdentity {
   return { id, sandboxName: deriveSandboxName(id) };
 }
 
 export async function getWorkspaceIdentity() {
-  const cookieStore = await cookies();
-  const id = parseWorkspaceCookie(cookieStore.get(COOKIE_NAME)?.value);
-  return id ? toIdentity(id) : null;
+  const session = await requireGitHubSession();
+  return toIdentity(deriveUserWorkspaceId(session.account.id));
 }
 
 export async function getOrCreateWorkspaceIdentity() {
-  const cookieStore = await cookies();
-  const existing = parseWorkspaceCookie(cookieStore.get(COOKIE_NAME)?.value);
-  if (existing) return toIdentity(existing);
-
-  const id = randomBytes(32).toString("hex");
-  cookieStore.set(COOKIE_NAME, serializeWorkspaceCookie(id), {
-    httpOnly: true,
-    maxAge: COOKIE_MAX_AGE_SECONDS,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    priority: "high",
-  });
-  return toIdentity(id);
+  return getWorkspaceIdentity();
 }
 
 export async function clearWorkspaceIdentity() {

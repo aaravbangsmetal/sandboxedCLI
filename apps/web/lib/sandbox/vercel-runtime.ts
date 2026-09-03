@@ -31,9 +31,11 @@ fi
 export HISTFILE="${sandboxConfig.stateDirectory}/history/bash_history"
 export HISTSIZE=10000
 export HISTFILESIZE=20000
+export PATH="${sandboxConfig.stateDirectory}/bin:$PATH"
 shopt -s histappend
 PROMPT_COMMAND="history -a; history -n"
 PS1=">_ "
+git config --global credential.helper "${sandboxConfig.stateDirectory}/bin/git-credential-sandboxedcli"
 if [ -f "${sandboxConfig.stateDirectory}/active_repo_path" ]; then
   repo_path="$(cat "${sandboxConfig.stateDirectory}/active_repo_path")"
   if [ -d "$repo_path/.git" ]; then
@@ -44,6 +46,23 @@ if [ -f "${sandboxConfig.stateDirectory}/active_repo_path" ]; then
 else
   cd "${sandboxConfig.cwd}"
 fi
+`;
+
+const GIT_CREDENTIAL_HELPER = `#!/bin/sh
+set -eu
+[ "\${1:-}" = "get" ] || exit 0
+protocol=""
+host=""
+while IFS='=' read -r key value; do
+  case "$key" in
+    protocol) protocol="$value" ;;
+    host) host="$value" ;;
+  esac
+done
+[ "$protocol" = "https" ] || exit 0
+[ "$host" = "github.com" ] || exit 0
+[ -n "\${GITHUB_TOKEN:-}" ] || exit 0
+printf 'username=x-access-token\\npassword=%s\\n' "$GITHUB_TOKEN"
 `;
 
 const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -144,13 +163,22 @@ function assertConfigured() {
 }
 
 async function ensureWorkspaceFiles(sandbox: Sandbox) {
-  const directory = await sandbox.runCommand("mkdir", ["-p", sandboxConfig.stateDirectory]);
+  const directory = await sandbox.runCommand("mkdir", [
+    "-p",
+    sandboxConfig.stateDirectory,
+    `${sandboxConfig.stateDirectory}/bin`,
+  ]);
   if (directory.exitCode !== 0) throw new Error(await directory.stderr());
   await sandbox.writeFiles([
     {
       path: `${sandboxConfig.stateDirectory}/bashrc`,
       content: BASH_RC,
       mode: 0o600,
+    },
+    {
+      path: `${sandboxConfig.stateDirectory}/bin/git-credential-sandboxedcli`,
+      content: GIT_CREDENTIAL_HELPER,
+      mode: 0o700,
     },
   ]);
 }
@@ -285,14 +313,26 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         [
           'set -euo pipefail',
           'mkdir -p "$(dirname "$3")"',
-          'if [ -d "$3/.git" ]; then exit 17; fi',
+          'if [ -d "$3/.git" ]; then',
+          '  git -C "$3" remote set-url origin "$2"',
+          '  git -C "$3" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch origin "$1"',
+          '  if git -C "$3" show-ref --verify --quiet "refs/heads/$1"; then',
+          '    git -C "$3" checkout "$1"',
+          '  else',
+          '    git -C "$3" checkout --track -b "$1" "origin/$1"',
+          '  fi',
+          '  already_present=1',
+          'else',
           'git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" clone --origin origin --branch "$1" --single-branch "$2" "$3"',
+          '  already_present=0',
+          'fi',
           'git -C "$3" config user.name "$4"',
           'git -C "$3" config user.email "$5"',
           'git -C "$3" config pull.rebase false',
           'printf "%s\n" "$3" > "/vercel/sandbox/.sandboxedcli/active_repo_path"',
           'printf "%s\n" "$6" > "/vercel/sandbox/.sandboxedcli/active_repo_full_name"',
           'printf "%s\n" "$7" > "/vercel/sandbox/.sandboxedcli/active_repo_default_branch"',
+          '[ "$already_present" = 0 ] || exit 17',
         ].join("\n"),
         "clone-repository",
         branch,
@@ -411,6 +451,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     name: string,
     terminalId: string,
     size: { cols: number; rows: number },
+    githubAccessToken: string,
   ): Promise<TerminalConnection> {
     const sandbox = await Sandbox.getOrCreate({
       name,
@@ -425,8 +466,26 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       onCreate: ensureWorkspaceFiles,
       onResume: ensureWorkspaceFiles,
     });
-    const interactive = await sandbox.openInteractive();
     const safeTerminalId = tmuxSessionName(terminalId);
+    const terminal = await sandbox.runCommand({
+      cmd: "tmux",
+      args: [
+        "new-session",
+        "-A",
+        "-d",
+        "-s",
+        safeTerminalId,
+        "/bin/bash",
+        "--noprofile",
+        "--rcfile",
+        `${sandboxConfig.stateDirectory}/bashrc`,
+      ],
+      cwd: sandboxConfig.cwd,
+      env: { GITHUB_TOKEN: githubAccessToken, GH_TOKEN: githubAccessToken },
+      timeoutMs: 30_000,
+    });
+    if (terminal.exitCode !== 0) throw new Error((await terminal.stderr()) || "Unable to start terminal.");
+    const interactive = await sandbox.openInteractive();
 
     return {
       sandbox: toStatus(sandbox),
@@ -437,16 +496,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       start: {
         type: "start",
         command: "tmux",
-        args: [
-          "new-session",
-          "-A",
-          "-s",
-          safeTerminalId,
-          "/bin/bash",
-          "--noprofile",
-          "--rcfile",
-          `${sandboxConfig.stateDirectory}/bashrc`,
-        ],
+        args: ["attach-session", "-t", safeTerminalId],
         env: ["TERM=xterm-256color", "COLORTERM=truecolor"],
         cwd: sandboxConfig.cwd,
         cols: size.cols,

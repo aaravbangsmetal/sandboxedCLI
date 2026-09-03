@@ -183,11 +183,16 @@ function normalizeRepository(repo: GitHubRepoResponse): GitHubRepository {
 }
 
 export async function listGitHubRepositories(accessToken: string) {
-  const repos = await githubJson<GitHubRepoResponse[]>(
-    "https://api.github.com/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=pushed&per_page=100",
-    { headers: githubHeaders(accessToken) },
-  );
-  return repos.map(normalizeRepository);
+  const repositories: GitHubRepository[] = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const repos = await githubJson<GitHubRepoResponse[]>(
+      `https://api.github.com/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=pushed&per_page=100&page=${page}`,
+      { headers: githubHeaders(accessToken) },
+    );
+    repositories.push(...repos.map(normalizeRepository));
+    if (repos.length < 100) break;
+  }
+  return repositories;
 }
 
 export async function createGitHubPullRequest(

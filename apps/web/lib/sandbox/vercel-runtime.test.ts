@@ -73,17 +73,27 @@ describe("VercelSandboxRuntime", () => {
       "sandboxed-cli-test",
       "terminal-one",
       { cols: 120, rows: 40 },
+      "gho_token",
     );
 
     expect(sandbox.openInteractive).toHaveBeenCalledOnce();
     expect(connection.websocketToken).toBe("pty-token");
     expect(connection.start).toMatchObject({
       command: "tmux",
-      args: expect.arrayContaining(["-A", "sc-terminal-one"]),
+      args: ["attach-session", "-t", "sc-terminal-one"],
       cols: 120,
       rows: 40,
     });
-    expect(connection.start.args).toContain("/vercel/sandbox/.sandboxedcli/bashrc");
+    expect(connection.start.env).not.toEqual(expect.arrayContaining([expect.stringContaining("gho_token")]));
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cmd: "tmux",
+        env: { GITHUB_TOKEN: "gho_token", GH_TOKEN: "gho_token" },
+        args: expect.arrayContaining(["-A", "sc-terminal-one"]),
+      }),
+    );
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).not.toContain("gho_token");
   });
 
   it("reports sandbox image health from the baked environment command", async () => {
@@ -181,6 +191,9 @@ describe("VercelSandboxRuntime", () => {
         { login: "octocat", email: "octocat@example.com" },
       ),
     ).resolves.toMatchObject({ alreadyPresent: true });
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).toContain("fetch origin");
+    expect(command.args.join(" ")).toContain("active_repo_path");
   });
 
   it("rejects unsafe branch names before running sandbox commands", async () => {
