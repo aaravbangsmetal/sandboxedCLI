@@ -4,6 +4,7 @@ import { APIError, Sandbox } from "@vercel/sandbox";
 import { randomUUID } from "node:crypto";
 
 import type {
+  SandboxEnvironmentCheck,
   PauseResult,
   SandboxEnvironmentReport,
   SandboxRuntime,
@@ -37,27 +38,39 @@ function degradedEnvironmentReport(detail: string): SandboxEnvironmentReport {
   };
 }
 
+function parseEnvironmentCheck(check: unknown): SandboxEnvironmentCheck | null {
+  if (!check || typeof check !== "object") return null;
+  const candidate = check as Record<string, unknown>;
+  if (
+    typeof candidate.name !== "string" ||
+    (candidate.status !== "ok" && candidate.status !== "fail") ||
+    typeof candidate.detail !== "string"
+  ) {
+    return null;
+  }
+  return {
+    name: candidate.name,
+    status: candidate.status,
+    detail: candidate.detail,
+  };
+}
+
 function parseEnvironmentReport(stdout: string): SandboxEnvironmentReport {
   const parsed = JSON.parse(stdout) as Partial<SandboxEnvironmentReport>;
+  const checks = Array.isArray(parsed.checks)
+    ? parsed.checks.flatMap((check) => {
+        const parsedCheck = parseEnvironmentCheck(check);
+        return parsedCheck ? [parsedCheck] : [];
+      })
+    : [];
+
   return {
     status: parsed.status === "ok" || parsed.status === "fail" ? parsed.status : "degraded",
     workspace: typeof parsed.workspace === "string" ? parsed.workspace : sandboxConfig.cwd,
     stateDirectory:
       typeof parsed.stateDirectory === "string" ? parsed.stateDirectory : sandboxConfig.stateDirectory,
     image: sandboxConfig.image,
-    checks: Array.isArray(parsed.checks)
-      ? parsed.checks
-          .filter((check) => {
-            if (!check || typeof check !== "object") return false;
-            const candidate = check as Record<string, unknown>;
-            return (
-              typeof candidate.name === "string" &&
-              (candidate.status === "ok" || candidate.status === "fail") &&
-              typeof candidate.detail === "string"
-            );
-          })
-          .map((check) => check as SandboxEnvironmentReport["checks"][number])
-      : [],
+    checks,
   };
 }
 
