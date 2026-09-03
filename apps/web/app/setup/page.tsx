@@ -21,17 +21,18 @@ const setupLines: readonly SequenceLine[] = [
       { text: "fetch_curl" },
     ],
   },
-  { segments: [{ text: ">_28 packages downloaded" }] },
-  { segments: [{ text: ">_sandbox_init!", tone: "accent" }] },
+  { segments: [{ text: ">_28 packages available" }] },
+  { segments: [{ text: ">_requesting persistent workspace", tone: "muted" }] },
 ] as const;
 
 export default function SetupPage() {
   return (
     <AnimatedOnboarding
       lines={setupLines}
-      completionMessage="Mock sandbox setup complete"
+      completionMessage="Sandbox preparation requested"
       destination="/terminal"
-      holdMs={900}
+      holdMs={0}
+      prepareSandbox
     />
   );
 }
