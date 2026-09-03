@@ -78,6 +78,17 @@ export interface SandboxRepositoryClone {
   alreadyPresent: boolean;
 }
 
+export interface SandboxGitStatus {
+  repositoryDirectory: string;
+  output: string;
+}
+
+export interface SandboxGitDiff {
+  repositoryDirectory: string;
+  output: string;
+  truncated: boolean;
+}
+
 export interface SandboxRuntime {
   isConfigured(): boolean;
   getStatus(name: string): Promise<SandboxStatus>;
@@ -94,6 +105,8 @@ export interface SandboxRuntime {
     user: { login: string; email: string | null },
     branch?: string,
   ): Promise<SandboxRepositoryClone>;
+  gitStatus(name: string): Promise<SandboxGitStatus>;
+  gitDiff(name: string): Promise<SandboxGitDiff>;
   openTerminal(
     name: string,
     terminalId: string,

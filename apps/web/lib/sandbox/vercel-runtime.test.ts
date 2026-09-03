@@ -201,6 +201,37 @@ describe("VercelSandboxRuntime", () => {
     expect(sdk.getOrCreate).not.toHaveBeenCalled();
   });
 
+  it("reads git status from the active sandbox repository", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "/vercel/sandbox/repos/octocat__hello-world\n## main...origin/main\n M README.md\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().gitStatus("sandboxed-cli-test")).resolves.toEqual({
+      repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+      output: "## main...origin/main\n M README.md\n",
+    });
+  });
+
+  it("reads a bounded git diff from the active sandbox repository", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "/vercel/sandbox/repos/octocat__hello-world\n README.md | 1 +\n+hello\n",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().gitDiff("sandboxed-cli-test")).resolves.toEqual({
+      repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+      output: " README.md | 1 +\n+hello\n",
+      truncated: false,
+    });
+  });
+
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {
     const running = fakeSandbox("running");
     const stopped = fakeSandbox("stopped");

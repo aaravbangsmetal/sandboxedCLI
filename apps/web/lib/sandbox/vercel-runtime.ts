@@ -7,6 +7,8 @@ import type {
   SandboxEnvironmentCheck,
   PauseResult,
   SandboxEnvironmentReport,
+  SandboxGitDiff,
+  SandboxGitStatus,
   SandboxRepositoryClone,
   SandboxRuntime,
   SandboxStatus,
@@ -98,6 +100,25 @@ function assertSafeBranch(branch: string) {
   if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
     throw new Error("Branch names may only contain safe Git ref characters.");
   }
+}
+
+async function commandStdoutOrThrow(
+  result: Awaited<ReturnType<Sandbox["runCommand"]>>,
+  fallback: string,
+) {
+  const stdout = await result.stdout();
+  if (result.exitCode === 0) return stdout;
+  const stderr = await result.stderr();
+  throw new Error(stderr || stdout || fallback);
+}
+
+function splitRepositoryCommandOutput(output: string) {
+  const newline = output.indexOf("\n");
+  if (newline === -1) return { repositoryDirectory: output.trim(), output: "" };
+  return {
+    repositoryDirectory: output.slice(0, newline).trim(),
+    output: output.slice(newline + 1),
+  };
 }
 
 function isNotFound(error: unknown) {
@@ -276,6 +297,55 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       throw new Error(stderr || "Repository clone failed.");
     }
     return { fullName: repository.fullName, branch, directory, alreadyPresent: false };
+  }
+
+  async gitStatus(name: string): Promise<SandboxGitStatus> {
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          'printf "%s\n" "$repo"',
+          'git -C "$repo" status --short --branch',
+        ].join("\n"),
+      ],
+      cwd: sandboxConfig.cwd,
+      timeoutMs: 30_000,
+    });
+    return splitRepositoryCommandOutput(await commandStdoutOrThrow(result, "Git status failed."));
+  }
+
+  async gitDiff(name: string): Promise<SandboxGitDiff> {
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          'printf "%s\n" "$repo"',
+          'git -C "$repo" diff --stat',
+          'git -C "$repo" diff --no-ext-diff --color=never | head -c 120000',
+        ].join("\n"),
+      ],
+      cwd: sandboxConfig.cwd,
+      timeoutMs: 30_000,
+    });
+    const output = await commandStdoutOrThrow(result, "Git diff failed.");
+    const parsed = splitRepositoryCommandOutput(output);
+    return {
+      repositoryDirectory: parsed.repositoryDirectory,
+      output: parsed.output,
+      truncated: parsed.output.length >= 120000,
+    };
   }
 
   async openTerminal(
