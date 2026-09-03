@@ -27,6 +27,10 @@
     "pnpm": {
       "version": "11.25.0",
       "integrity": "sha512-XN6SW08HX3Jetx+64YpC/+eEUkeJ8ZthxzHLhyHsKKruFg4BqNWvT+2ypCzb8wDv4j2zVrDUoXtNY+EfirfJVg=="
+    },
+    "vercel": {
+      "version": "59.11.2",
+      "integrity": "sha512-1MY49OhofgVO98dICAHz1jSiU2dxVXwstTpIYmR4czsg/NjUeCs78l/kdLhw/ITi3ET7Rxq1/5eqYsRmmPAhzQ=="
     }
   }
 }
