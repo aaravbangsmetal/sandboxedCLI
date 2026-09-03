@@ -186,6 +186,19 @@ test("preserves mock command history independently between tabs", async ({ page 
 });
 
 test("creates a terminal with keyboard or touch controls and logs out", async ({ page }, testInfo) => {
+  let sessionCleared = false;
+  await page.route("**/api/auth/session", async (route) => {
+    if (route.request().method() === "DELETE") {
+      sessionCleared = true;
+      await route.fulfill({ contentType: "application/json", body: "{}" });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ authenticated: true, user: { login: "octocat" }, scope: "repo" }),
+    });
+  });
+
   await page.goto("/terminal");
   if (testInfo.project.name.startsWith("mobile")) {
     await page.getByRole("button", { name: ">_new" }).click();
@@ -195,6 +208,7 @@ test("creates a terminal with keyboard or touch controls and logs out", async ({
   await expect(page.getByRole("tab")).toHaveCount(2);
   await page.getByRole("button", { name: "$_logout →" }).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => sessionCleared).toBe(true);
 });
 
 test("reviews workspace changes and opens a pull request", async ({ page }) => {

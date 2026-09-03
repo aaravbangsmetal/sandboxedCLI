@@ -66,12 +66,21 @@ export function TerminalWorkspace() {
   const tabButtons = useRef(new Map<string, HTMLButtonElement>());
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/sandbox/pause", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
+      localStorage.removeItem(STORAGE_KEY);
+      await Promise.allSettled([
+        fetch("/api/sandbox/pause", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+          keepalive: true,
+        }),
+        fetch("/api/auth/session", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+          keepalive: true,
+        }),
+      ]);
     } finally {
       router.replace("/");
     }
