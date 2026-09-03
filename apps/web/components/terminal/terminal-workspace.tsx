@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { MockTerminalTransport } from "@/lib/terminal/mock-transport";
@@ -17,7 +18,8 @@ interface TerminalTab {
 export function TerminalWorkspace() {
   const router = useRouter();
   const nextId = useRef(2);
-  const logout = useCallback(() => router.push("/"), [router]);
+  const tabButtons = useRef(new Map<number, HTMLButtonElement>());
+  const logout = useCallback(() => router.replace("/"), [router]);
   const createTab = useCallback((): TerminalTab => {
     const id = nextId.current++;
     return {
@@ -43,24 +45,49 @@ export function TerminalWorkspace() {
 
   const closeTab = useCallback(
     (id: number) => {
-      setTabs((current) => {
-        const closingIndex = current.findIndex((tab) => tab.id === id);
-        const remaining = current.filter((tab) => tab.id !== id);
+      const closingIndex = tabs.findIndex((tab) => tab.id === id);
+      const closingTab = tabs[closingIndex];
+      if (!closingTab) return;
 
-        if (remaining.length === 0) {
-          const replacement = createTab();
-          setActiveId(replacement.id);
-          return [replacement];
-        }
+      closingTab.transport.dispose();
+      const remaining = tabs.filter((tab) => tab.id !== id);
 
-        if (id === activeId) {
-          const replacement = remaining[Math.min(closingIndex, remaining.length - 1)];
-          setActiveId(replacement.id);
-        }
-        return remaining;
-      });
+      if (remaining.length === 0) {
+        const replacement = createTab();
+        setTabs([replacement]);
+        setActiveId(replacement.id);
+        return;
+      }
+
+      setTabs(remaining);
+      if (id === activeId) {
+        const replacement = remaining[Math.min(closingIndex, remaining.length - 1)];
+        setActiveId(replacement.id);
+      }
     },
-    [activeId, createTab],
+    [activeId, createTab, tabs],
+  );
+
+  const selectAndFocusTab = useCallback((id: number) => {
+    setActiveId(id);
+    requestAnimationFrame(() => tabButtons.current.get(id)?.focus());
+  }, []);
+
+  const handleTabKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>, id: number) => {
+      const currentIndex = tabs.findIndex((tab) => tab.id === id);
+      let targetIndex: number | null = null;
+
+      if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      if (event.key === "ArrowLeft") targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      if (event.key === "Home") targetIndex = 0;
+      if (event.key === "End") targetIndex = tabs.length - 1;
+
+      if (targetIndex === null) return;
+      event.preventDefault();
+      selectAndFocusTab(tabs[targetIndex].id);
+    },
+    [selectAndFocusTab, tabs],
   );
 
   useEffect(() => {
@@ -89,12 +116,17 @@ export function TerminalWorkspace() {
                 <button
                   className={styles.tab}
                   id={`terminal-tab-${tab.id}`}
+                  ref={(element) => {
+                    if (element) tabButtons.current.set(tab.id, element);
+                    else tabButtons.current.delete(tab.id);
+                  }}
                   type="button"
                   role="tab"
                   aria-controls={`terminal-panel-${tab.id}`}
                   aria-selected={tab.id === activeId}
                   tabIndex={tab.id === activeId ? 0 : -1}
                   onClick={() => setActiveId(tab.id)}
+                  onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
                 >
                   {tab.title}
                 </button>
@@ -109,7 +141,12 @@ export function TerminalWorkspace() {
               </div>
             ))}
           </div>
-          <button className={styles.newTab} type="button" onClick={addTab}>
+          <button
+            className={styles.newTab}
+            type="button"
+            aria-keyshortcuts="Meta+Shift+T Control+Shift+T"
+            onClick={addTab}
+          >
             &gt;_new
           </button>
         </div>
@@ -130,7 +167,7 @@ export function TerminalWorkspace() {
         <footer className={styles.footer}>
           <span>$_X;</span>
           <a href="mailto:issues@sandboxedcli.xyz">@_issues@sandboxedcli.xyz</a>
-          <button type="button" onClick={addTab}>⌘⇧T new terminal</button>
+          <button type="button" aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={addTab}>⌘⇧T new terminal</button>
           <span>© 2026 <span className={styles.dark}>sandboxedcli.xyz</span></span>
           <button className={styles.logout} type="button" onClick={logout}>$_logout →</button>
         </footer>
