@@ -17,6 +17,7 @@ export interface VercelTerminalTransportOptions {
 }
 
 const MAX_BUFFERED_INPUT = 64 * 1024;
+const MAX_RECONNECT_ATTEMPTS = 6;
 const RECONNECT_DELAYS = [500, 1_000, 2_000, 4_000] as const;
 
 function parseExitFrame(data: string) {
@@ -167,6 +168,11 @@ export class VercelTerminalTransport implements TerminalTransport {
 
   private scheduleReconnect() {
     this.clearReconnectTimer();
+    if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+      this.onStateChange?.("error");
+      this.onOutput?.("\r\n\x1b[90mterminal reconnect paused; use >_start to retry\x1b[0m\r\n");
+      return;
+    }
     const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
     this.reconnectAttempt += 1;
     this.onStateChange?.("reconnecting");

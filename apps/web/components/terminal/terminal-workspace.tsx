@@ -62,7 +62,18 @@ function nextTitle(tabs: readonly StoredTerminalTab[]) {
 export function TerminalWorkspace() {
   const router = useRouter();
   const tabButtons = useRef(new Map<string, HTMLButtonElement>());
-  const logout = useCallback(() => router.replace("/"), [router]);
+  const logout = useCallback(async () => {
+    try {
+      await fetch("/api/sandbox/pause", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        keepalive: true,
+      });
+    } finally {
+      router.replace("/");
+    }
+  }, [router]);
   const createTransport = useCallback(
     (id: string): TerminalTransport =>
       process.env.NEXT_PUBLIC_SANDBOX_TRANSPORT === "mock"

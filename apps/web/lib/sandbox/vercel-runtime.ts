@@ -188,6 +188,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
 
   async killTerminal(name: string, terminalId: string) {
     const sandbox = await getSandbox(name);
+    if (sandbox.status !== "running") return;
     const result = await sandbox.runCommand("tmux", ["kill-session", "-t", tmuxSessionName(terminalId)]);
     if (result.exitCode !== 0) {
       const stderr = await result.stderr();

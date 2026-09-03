@@ -10,18 +10,18 @@ const setupLines: readonly SequenceLine[] = [
   },
   {
     segments: [
-      { text: ">_installing dependencies; ", tone: "muted" },
+      { text: ">_restoring filesystem; ", tone: "muted" },
       { text: "setting_access" },
     ],
   },
-  { segments: [{ text: ">_dependencies installed" }] },
+  { segments: [{ text: ">_universal image selected" }] },
   {
     segments: [
-      { text: ">_downloading packages; ", tone: "muted" },
-      { text: "fetch_curl" },
+      { text: ">_opening controller; ", tone: "muted" },
+      { text: "issuing_pty" },
     ],
   },
-  { segments: [{ text: ">_28 packages available" }] },
+  { segments: [{ text: ">_terminal transport ready" }] },
   { segments: [{ text: ">_requesting persistent workspace", tone: "muted" }] },
 ] as const;
 
