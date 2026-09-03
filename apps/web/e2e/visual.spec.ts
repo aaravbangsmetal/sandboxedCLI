@@ -71,7 +71,6 @@ test.beforeEach(async ({ page }) => {
     });
   });
   await page.route("**/api/sandbox", async (route) => {
-    if (route.request().method() !== "POST") return route.continue();
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({

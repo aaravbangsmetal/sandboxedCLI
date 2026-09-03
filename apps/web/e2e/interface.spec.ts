@@ -106,6 +106,20 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+  await page.route("**/api/sandbox/pause", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sandbox: {
+          name: "sandboxed-cli-e2e",
+          state: "stopped",
+          persistent: true,
+          filesystemPreserved: true,
+          processMemoryPreserved: false,
+        },
+      }),
+    });
+  });
   await page.route("**/api/sandbox", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
@@ -123,7 +137,19 @@ test.beforeEach(async ({ page }) => {
       });
       return;
     }
-    await route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        sandbox: {
+          name: "sandboxed-cli-e2e",
+          state: "running",
+          persistent: true,
+          filesystemPreserved: true,
+          processMemoryPreserved: false,
+        },
+      }),
+    });
   });
 });
 
@@ -168,6 +194,19 @@ test("creates, selects, keyboard-navigates, and closes independent tabs", async 
   await page.getByRole("button", { name: "Close $_terminal 2" }).click();
   await page.getByRole("button", { name: "Close $_terminal 1" }).click();
   await expect(page.getByRole("tab", { selected: true })).toHaveCount(1);
+});
+
+test("opens a cloned GitHub repository in a fresh terminal", async ({ page }) => {
+  await page.goto("/terminal");
+  await expect(page.getByLabel("GitHub repository", { exact: true })).toHaveValue(
+    "octocat/hello-world",
+  );
+  await page.getByRole("button", { name: ">_clone" }).click();
+  await expect(page.getByText(/octocat\/hello-world ready at/)).toBeVisible();
+  await expect(page.getByRole("tab", { name: "$_terminal 2" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 });
 
 test("preserves mock command history independently between tabs", async ({ page }, testInfo) => {
