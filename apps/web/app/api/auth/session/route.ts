@@ -12,6 +12,8 @@ export async function GET() {
       authenticated: Boolean(session),
       user: session?.user ?? null,
       scope: session?.scope ?? "",
+      account: session?.account ?? null,
+      connectedAt: session?.connectedAt ?? null,
     });
   } catch (error) {
     return sandboxErrorResponse(error);
