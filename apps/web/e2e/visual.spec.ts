@@ -10,6 +10,21 @@ const routes = [
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/sandbox/environment", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        environment: {
+          status: "ok",
+          workspace: "/vercel/sandbox",
+          stateDirectory: "/vercel/sandbox/.sandboxedcli",
+          image: "sandboxed-cli-agent:e2e",
+          checks: [],
+        },
+      }),
+    });
+  });
   await page.route("**/api/sandbox", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     await route.fulfill({
