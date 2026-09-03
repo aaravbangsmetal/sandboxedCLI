@@ -4,6 +4,10 @@ import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
 import {
+  AuthenticationRequiredError,
+} from "@/lib/auth/require-session";
+
+import {
   InvalidTerminalIdError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
@@ -17,6 +21,9 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
 }
 
 export function sandboxErrorResponse(error: unknown) {
+  if (error instanceof AuthenticationRequiredError) {
+    return sandboxJson({ error: error.message, code: "authentication_required" }, { status: 401 });
+  }
   if (error instanceof UnsafeSandboxRequestError) {
     return sandboxJson({ error: error.message, code: "unsafe_request" }, { status: 403 });
   }
