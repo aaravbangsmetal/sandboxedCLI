@@ -1,0 +1,31 @@
+{
+  "$schema": "./versions.schema.json",
+  "baseImage": "ubuntu:24.04@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51fb3e07a4a7d7bfa79316",
+  "platform": "linux/amd64",
+  "node": {
+    "version": "24.20.0",
+    "sha256": "2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2"
+  },
+  "githubCli": {
+    "version": "2.99.0",
+    "sha256": "ed4960225d2833e04a61590d9fa2b5773d147f3aa375459e5466a40c102f3832"
+  },
+  "npmPackages": {
+    "@openai/codex": {
+      "version": "0.153.0",
+      "integrity": "sha512-k55kUZaclNi5ceUStSVuyW834ruA6AEdzTK7Xi3M1mOyXokUmq1sJLXm1RJ3XD2S7bRPeF1EXNsYB5Qxwus0mw=="
+    },
+    "@anthropic-ai/claude-code": {
+      "version": "2.1.259",
+      "integrity": "sha512-kzhz+R36GgL5aouAkeMO9nI1BEIVaRx1NGu0wTTn/H315l61uiLRo13yvva7H10Pfv0PGgzqJ4m+EKv9BzIRXQ=="
+    },
+    "opencode-ai": {
+      "version": "1.18.27",
+      "integrity": "sha512-5xrG2gQEwV2sLus30SZX9GyLbPX3z57BCxddedDM0wx1bgnwlHVLOS/FD2uve7fEZlmkr7KYFbvs65ySz1rwzA=="
+    },
+    "pnpm": {
+      "version": "11.25.0",
+      "integrity": "sha512-XN6SW08HX3Jetx+64YpC/+eEUkeJ8ZthxzHLhyHsKKruFg4BqNWvT+2ypCzb8wDv4j2zVrDUoXtNY+EfirfJVg=="
+    }
+  }
+}
