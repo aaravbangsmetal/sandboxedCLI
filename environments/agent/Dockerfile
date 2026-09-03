@@ -9,6 +9,7 @@ ARG NODE_SHA256=2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2
 ARG PNPM_VERSION=11.25.0
 ARG GH_VERSION=2.99.0
 ARG GH_SHA256=ed4960225d2833e04a61590d9fa2b5773d147f3aa375459e5466a40c102f3832
+ARG CODEX_VERSION=0.153.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -94,6 +95,10 @@ RUN curl --fail --silent --show-error --location \
     && install -m 0755 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh \
     && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_amd64" \
     && test "$(gh --version | awk 'NR == 1 { print $3 }')" = "${GH_VERSION}"
+
+RUN npm install --global --include=optional --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" \
+    && codex --version | grep --fixed-strings "${CODEX_VERSION}" \
+    && npm cache clean --force
 
 WORKDIR /vercel/sandbox
 USER vercel-sandbox
