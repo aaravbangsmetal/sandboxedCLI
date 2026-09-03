@@ -47,6 +47,50 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+  await page.route("**/api/github/workspace", async (route) => {
+    if (!route.request().url().endsWith("/api/github/workspace")) return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: {
+          repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+          output: "## main...origin/main\n M README.md\n",
+        },
+      }),
+    });
+  });
+  await page.route("**/api/github/workspace/diff", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        diff: {
+          repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+          output: " README.md | 1 +\n+cloud terminal change\n",
+          truncated: false,
+        },
+      }),
+    });
+  });
+  await page.route("**/api/github/workspace/pr", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        pushed: {
+          fullName: "octocat/hello-world",
+          branch: "sandboxedcli/change-e2e",
+          baseBranch: "main",
+          commitSha: "0123456789abcdef0123456789abcdef01234567",
+        },
+        pullRequest: {
+          number: 12,
+          htmlUrl: "https://github.com/octocat/hello-world/pull/12",
+          head: "sandboxedcli/change-e2e",
+          base: "main",
+          title: "Apply sandbox changes",
+        },
+      }),
+    });
+  });
   await page.route("**/api/sandbox/environment", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -151,6 +195,19 @@ test("creates a terminal with keyboard or touch controls and logs out", async ({
   await expect(page.getByRole("tab")).toHaveCount(2);
   await page.getByRole("button", { name: "$_logout →" }).click();
   await expect(page).toHaveURL(/\/$/);
+});
+
+test("reviews workspace changes and opens a pull request", async ({ page }) => {
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_review" }).click();
+  await expect(page.getByLabel("Git status")).toContainText("README.md");
+  await expect(page.getByLabel("Git diff preview")).toContainText("cloud terminal change");
+  await page.getByRole("button", { name: ">_open pr" }).click();
+  await expect(page.getByText("pull request #12 opened")).toBeVisible();
+  await expect(page.getByRole("link", { name: "view pull request" })).toHaveAttribute(
+    "href",
+    "https://github.com/octocat/hello-world/pull/12",
+  );
 });
 
 test("fits the mobile viewport and keeps the footer readable", async ({ page }, testInfo) => {

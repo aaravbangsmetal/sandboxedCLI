@@ -12,6 +12,7 @@ import styles from "./terminal-workspace.module.css";
 import { RepositoryPicker } from "./repository-picker";
 import { SandboxControls } from "./sandbox-controls";
 import { XtermPane } from "./xterm-pane";
+import { WorkspaceDelivery } from "./workspace-delivery";
 
 interface StoredTerminalTab {
   id: string;
@@ -286,6 +287,7 @@ export function TerminalWorkspace() {
           onResume={refreshTransports}
           onDestroy={destroyWorkspace}
         />
+        <WorkspaceDelivery />
 
         <footer className={styles.footer}>
           <span>$_X;</span>
