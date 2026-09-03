@@ -1,10 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { supabasePublicConfig } from "./config";
+import { optionalSupabasePublicConfig } from "./config";
 
 export async function refreshSupabaseSession(request: NextRequest) {
-  const config = supabasePublicConfig();
+  const config = optionalSupabasePublicConfig();
+  if (!config) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const supabase = createServerClient(config.url, config.publishableKey, {
     cookies: {
