@@ -4,6 +4,8 @@ ARG BASE_IMAGE=ubuntu:24.04@sha256:1e0a86e57d247923571b75e0aaf48a1449cf8c543d51f
 FROM ${BASE_IMAGE}
 
 ARG UBUNTU_SNAPSHOT=20260831T000000Z
+ARG NODE_VERSION=24.20.0
+ARG NODE_SHA256=2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -68,6 +70,14 @@ RUN apt-get update \
     && ln -s /usr/bin/python3 /usr/local/bin/python \
     && git lfs install --system \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl --fail --silent --show-error --location \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+      --output /tmp/node.tar.xz \
+    && printf '%s  %s\n' "${NODE_SHA256}" /tmp/node.tar.xz | sha256sum --check --strict \
+    && tar --extract --xz --file /tmp/node.tar.xz --directory /usr/local --strip-components=1 \
+    && rm /tmp/node.tar.xz \
+    && test "$(node --version)" = "v${NODE_VERSION}"
 
 WORKDIR /vercel/sandbox
 USER vercel-sandbox
