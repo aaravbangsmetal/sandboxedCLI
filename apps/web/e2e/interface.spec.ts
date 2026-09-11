@@ -196,14 +196,14 @@ test("creates, selects, keyboard-navigates, and closes independent tabs", async 
   await expect(page.getByRole("tab", { selected: true })).toHaveCount(1);
 });
 
-test("opens a cloned GitHub repository in a fresh terminal", async ({ page }) => {
+test("opens a cloned GitHub repository in the current terminal", async ({ page }) => {
   await page.goto("/terminal");
   await expect(page.getByLabel("GitHub repository", { exact: true })).toHaveValue(
     "octocat/hello-world",
   );
   await page.getByRole("button", { name: ">_clone" }).click();
   await expect(page.getByText(/octocat\/hello-world ready at/)).toBeVisible();
-  await expect(page.getByRole("tab", { name: "$_terminal 2" })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "$_terminal 1" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -352,11 +352,11 @@ test("retries a failed repository clone", async ({ page }) => {
   await expect(page.getByText(/octocat\/hello-world ready at/)).toBeVisible();
 });
 
-test("lands a new terminal in a cloned repository", async ({ page }, testInfo) => {
+test("lands the current terminal in a cloned repository", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.startsWith("mobile"), "xterm transcript assertion is desktop-only");
   await page.goto("/terminal");
   await page.getByRole("button", { name: ">_clone" }).click();
-  await expect(page.getByRole("tab", { name: "$_terminal 2" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "$_terminal 1" })).toHaveAttribute("aria-selected", "true");
   const input = page.getByRole("tabpanel").locator(".xterm-helper-textarea");
   await input.pressSequentially("pwd");
   await input.press("Enter");
