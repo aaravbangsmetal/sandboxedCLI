@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 
 import { MockTerminalTransport } from "@/lib/terminal/mock-transport";
 import type { TerminalTransport } from "@/lib/terminal/transport";
-import { VercelTerminalTransport } from "@/lib/terminal/vercel-transport";
+import {
+  type TerminalConnectionState,
+  VercelTerminalTransport,
+} from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
 import { RepositoryPicker } from "./repository-picker";
@@ -21,6 +24,7 @@ interface StoredTerminalTab {
 
 interface TerminalTab extends StoredTerminalTab {
   transport: TerminalTransport;
+  startupCommand?: string;
 }
 
 interface StoredWorkspace {
@@ -32,6 +36,16 @@ interface StoredWorkspace {
 const STORAGE_KEY = "sandboxedcli.terminals.v1";
 const DEFAULT_TAB = { id: "terminal-default", title: "$_terminal 1" } as const;
 const MAX_TERMINALS = 8;
+const REPOSITORY_DIRECTORY = /^\/vercel\/sandbox\/repos\/[A-Za-z0-9_.-]+$/;
+
+function shellSingleQuote(value: string) {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function changeDirectoryCommand(directory: string) {
+  if (!REPOSITORY_DIRECTORY.test(directory)) return "";
+  return `cd ${shellSingleQuote(directory)}\n`;
+}
 
 function isStoredWorkspace(value: unknown): value is StoredWorkspace {
   if (!value || typeof value !== "object") return false;
@@ -67,6 +81,7 @@ export function TerminalWorkspace() {
   const logout = useCallback(async () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem("sandboxedcli.active-repository.v1");
       await Promise.allSettled([
         fetch("/api/sandbox/pause", {
           method: "POST",
@@ -85,11 +100,16 @@ export function TerminalWorkspace() {
       router.replace("/");
     }
   }, [router]);
+  const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
   const createTransport = useCallback(
     (id: string): TerminalTransport =>
       process.env.NEXT_PUBLIC_SANDBOX_TRANSPORT === "mock"
         ? new MockTerminalTransport({ onLogout: logout })
-        : new VercelTerminalTransport(id),
+        : new VercelTerminalTransport(id, {
+            onStateChange: (state) => {
+              setConnectionStates((current) => ({ ...current, [id]: state }));
+            },
+          }),
     [logout],
   );
   const materialize = useCallback(
@@ -108,6 +128,24 @@ export function TerminalWorkspace() {
       }),
     );
   }, [createTransport]);
+
+  const retryTerminal = useCallback(
+    (id: string) => {
+      setConnectionStates((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      setTabs((current) =>
+        current.map((tab) => {
+          if (tab.id !== id) return tab;
+          tab.transport.dispose();
+          return { ...tab, transport: createTransport(tab.id) };
+        }),
+      );
+    },
+    [createTransport],
+  );
 
   const pauseTransports = useCallback(() => {
     tabs.forEach((tab) => tab.transport.dispose());
@@ -148,15 +186,31 @@ export function TerminalWorkspace() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
   }, [activeId, hydrated, tabs]);
 
-  const addTab = useCallback(() => {
-    if (tabs.length >= MAX_TERMINALS) return;
-    const tab = materialize({
-      id: `terminal-${crypto.randomUUID()}`,
-      title: nextTitle(tabs),
-    });
-    setTabs((current) => [...current, tab]);
-    setActiveId(tab.id);
-  }, [materialize, tabs]);
+  const addTab = useCallback(
+    (startupCommand?: string) => {
+      if (tabs.length >= MAX_TERMINALS) return;
+      const tab = materialize({
+        id: `terminal-${crypto.randomUUID()}`,
+        title: nextTitle(tabs),
+      });
+      setTabs((current) => [...current, { ...tab, startupCommand }]);
+      setActiveId(tab.id);
+    },
+    [materialize, tabs],
+  );
+
+  const openRepository = useCallback(
+    (directory: string, alreadyPresent: boolean) => {
+      const command = changeDirectoryCommand(directory);
+      if (alreadyPresent) {
+        const current = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
+        if (command && current) current.transport.write(command);
+        return;
+      }
+      addTab(command || undefined);
+    },
+    [activeId, addTab, tabs],
+  );
 
   const terminateRemoteTab = useCallback((terminalId: string) => {
     if (process.env.NEXT_PUBLIC_SANDBOX_TRANSPORT === "mock") return;
@@ -240,7 +294,7 @@ export function TerminalWorkspace() {
   return (
     <main className={styles.page}>
       <section className={styles.workspace} aria-label="Cloud terminal workspace">
-        <RepositoryPicker onRepositoryReady={addTab} />
+        <RepositoryPicker onRepositoryReady={openRepository} />
         <div className={styles.tabRow} role="tablist" aria-label="Open terminals" aria-orientation="horizontal">
           <div className={styles.tabs}>
             {tabs.map((tab) => (
@@ -271,7 +325,7 @@ export function TerminalWorkspace() {
             type="button"
             aria-keyshortcuts="Meta+Shift+T Control+Shift+T"
             disabled={tabs.length >= MAX_TERMINALS}
-            onClick={addTab}
+            onClick={() => addTab()}
           >
             &gt;_new
           </button>
@@ -286,7 +340,19 @@ export function TerminalWorkspace() {
             aria-labelledby={`terminal-tab-${tab.id}`}
             hidden={tab.id !== activeTab.id}
           >
-            <XtermPane transport={tab.transport} label={`${tab.title} interactive cloud terminal`} />
+            <p className={styles.connectionStatus} role="status" aria-live="polite">
+              terminal {connectionStates[tab.id] ?? "connecting"}
+            </p>
+            {connectionStates[tab.id] === "error" || connectionStates[tab.id] === "disconnected" ? (
+              <button className={styles.retryTerminal} type="button" onClick={() => retryTerminal(tab.id)}>
+                &gt;_reconnect
+              </button>
+            ) : null}
+            <XtermPane
+              transport={tab.transport}
+              label={`${tab.title} interactive cloud terminal`}
+              startupCommand={tab.startupCommand}
+            />
           </div>
         ))}
         {!hydrated && <div className={styles.terminalPanel} aria-label="Loading cloud terminal" />}
@@ -301,7 +367,7 @@ export function TerminalWorkspace() {
         <footer className={styles.footer}>
           <span>$_X;</span>
           <a href="mailto:issues@sandboxedcli.xyz">@_issues@sandboxedcli.xyz</a>
-          <button type="button" aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={addTab}>⌘⇧T new terminal</button>
+          <button type="button" aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={() => addTab()}>⌘⇧T new terminal</button>
           <span>© 2026 <span className={styles.dark}>sandboxedcli.xyz</span></span>
           <button className={styles.logout} type="button" onClick={logout}>$_logout →</button>
         </footer>

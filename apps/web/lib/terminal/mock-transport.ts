@@ -4,11 +4,10 @@ const PROMPT = "\r\n\x1b[30m>_\x1b[0m";
 
 const COMMANDS: Record<string, readonly string[]> = {
   help: [
-    "available commands: help, agents, pwd, clear, codex, claude, logout",
+    "available commands: help, agents, pwd, clear, cd, codex, claude, logout",
     "this interface is mocked; a live sandbox will be connected in the next phase.",
   ],
   agents: ["codex     ready", "claude    ready"],
-  pwd: ["/workspace/sandboxedcli"],
   codex: [
     "\x1b[30m>_codex\x1b[90m v0.24.82\x1b[0m",
     "model:     cloud agent (mock)",
@@ -25,6 +24,7 @@ export interface MockTerminalTransportOptions {
 }
 
 export class MockTerminalTransport implements TerminalTransport {
+  private cwd = "/workspace/sandboxedcli";
   private onOutput: TerminalOutputHandler | null = null;
   private input = "";
   private transcript = "";
@@ -111,6 +111,18 @@ export class MockTerminalTransport implements TerminalTransport {
         this.logoutTimer = null;
         this.onLogout?.();
       }, 180);
+      return;
+    }
+
+    if (command === "pwd") {
+      this.emit("\r\n" + this.cwd + PROMPT);
+      return;
+    }
+
+    if (command.startsWith("cd ")) {
+      const target = command.slice(3).trim().replace(/^['"]|['"]$/g, "");
+      if (target) this.cwd = target;
+      this.emit(PROMPT);
       return;
     }
 

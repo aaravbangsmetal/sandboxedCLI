@@ -6,7 +6,7 @@
 
 Run Codex, Claude Code, OpenCode, Git, and GitHub CLI from an isolated Vercel Sandbox—directly in the browser.
 
-[Get started](#run-it-locally) · [How it works](#how-it-works) · [Production setup](docs/production-environment.md)
+[Get started](#run-it-locally) · [How it works](#how-it-works) · [Workspace flow](docs/workspace-flow.md) · [Production setup](docs/production-environment.md)
 
 </div>
 

@@ -36,14 +36,21 @@ async function readJson<T>(response: Response) {
 }
 
 interface RepositoryPickerProps {
-  onRepositoryReady: (directory: string) => void;
+  onRepositoryReady: (directory: string, alreadyPresent: boolean) => void;
 }
+
+const ACTIVE_REPOSITORY_KEY = "sandboxedcli.active-repository.v1";
 
 export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selected, setSelected] = useState("");
+  const [activeRepository, setActiveRepository] = useState(() =>
+    typeof window === "undefined" ? "" : sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "",
+  );
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [failedAction, setFailedAction] = useState<"load" | "clone" | null>(null);
   const [message, setMessage] = useState("checking github");
 
   const selectedRepo = useMemo(
@@ -52,48 +59,53 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   );
 
   const loadRepositories = useCallback(async () => {
+    setLoading(true);
+    setFailedAction(null);
     setMessage("checking github");
-    const session = await readJson<SessionResponse>(
-      await fetch("/api/auth/session", { cache: "no-store" }),
-    );
-    if (!session?.authenticated) {
-      setAuthenticated(false);
-      setMessage("github login required");
-      return;
-    }
+    try {
+      const session = await readJson<SessionResponse>(
+        await fetch("/api/auth/session", { cache: "no-store" }),
+      );
+      if (!session?.authenticated) {
+        setAuthenticated(false);
+        setRepositories([]);
+        setSelected("");
+        setMessage("github login required");
+        return;
+      }
 
-    setAuthenticated(true);
-    setMessage(`github connected${session.user?.login ? ` as ${session.user.login}` : ""}`);
-    const repos = await readJson<ReposResponse>(await fetch("/api/github/repos", { cache: "no-store" }));
-    const nextRepositories = repos?.repositories ?? [];
-    setRepositories(nextRepositories);
-    setSelected((current) =>
-      nextRepositories.some((repository) => repository.fullName === current)
-        ? current
-        : nextRepositories[0]?.fullName ?? "",
-    );
-    if (nextRepositories.length === 0) setMessage("no repositories found");
+      setAuthenticated(true);
+      setMessage(`github connected${session.user?.login ? ` as ${session.user.login}` : ""} · loading repositories`);
+      const repos = await readJson<ReposResponse>(await fetch("/api/github/repos", { cache: "no-store" }));
+      const nextRepositories = repos?.repositories ?? [];
+      setRepositories(nextRepositories);
+      setSelected((current) => {
+        if (nextRepositories.some((repository) => repository.fullName === current)) return current;
+        const stored = sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "";
+        if (stored && nextRepositories.some((repository) => repository.fullName === stored)) return stored;
+        return nextRepositories[0]?.fullName ?? "";
+      });
+      setMessage(nextRepositories.length === 0 ? "no repositories found" : `${nextRepositories.length} repositories ready`);
+    } catch (error) {
+      setFailedAction("load");
+      setMessage(error instanceof Error ? error.message : "github unavailable");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    let active = true;
     const timer = window.setTimeout(() => {
-      void loadRepositories().catch((error) => {
-        if (!active) return;
-        setAuthenticated(false);
-        setMessage(error instanceof Error ? error.message : "github unavailable");
-      });
+      void loadRepositories();
     }, 0);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [loadRepositories]);
 
   const cloneRepository = useCallback(async () => {
     if (!selectedRepo) return;
     setBusy(true);
-    setMessage(`cloning ${selectedRepo.fullName}`);
+    setFailedAction(null);
+    setMessage(`cloning ${selectedRepo.fullName} · opening workspace`);
     try {
       const body = await readJson<CloneResponse>(
         await fetch("/api/github/repos/clone", {
@@ -108,26 +120,34 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
           ? `${body.clone.fullName} already at ${body.clone.directory}`
           : `${body.clone.fullName} ready at ${body.clone.directory}`,
       );
-      onRepositoryReady(body.clone.directory);
+      setActiveRepository(body.clone.fullName);
+      sessionStorage.setItem(ACTIVE_REPOSITORY_KEY, body.clone.fullName);
+      onRepositoryReady(body.clone.directory, body.clone.alreadyPresent);
     } catch (error) {
+      setFailedAction("clone");
       setMessage(error instanceof Error ? error.message : "clone failed");
     } finally {
       setBusy(false);
     }
   }, [onRepositoryReady, selectedRepo]);
 
+  const refreshRepositories = useCallback(() => {
+    void loadRepositories();
+  }, [loadRepositories]);
+
   return (
-    <div className={styles.repoBar} aria-label="GitHub repository controls">
+    <div className={styles.repoBar} aria-busy={loading || busy} aria-label="GitHub repository controls">
       <span className={styles.repoStatus} role="status" aria-live="polite">
         {message}
       </span>
+      {activeRepository ? <span className={styles.repoContext}>active: {activeRepository}</span> : null}
       {authenticated === false ? (
         <a href="/api/auth/github">&gt;_login github</a>
       ) : (
         <>
           <select
             aria-label="GitHub repository"
-            disabled={busy || repositories.length === 0}
+            disabled={loading || busy || repositories.length === 0}
             value={selected}
             onChange={(event) => setSelected(event.target.value)}
           >
@@ -137,9 +157,21 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
               </option>
             ))}
           </select>
-          <button type="button" disabled={busy || !selectedRepo} onClick={() => void cloneRepository()}>
+          <button type="button" disabled={loading || busy} onClick={refreshRepositories}>
+            &gt;_refresh
+          </button>
+          <button type="button" disabled={loading || busy || !selectedRepo} onClick={() => void cloneRepository()}>
             &gt;_clone
           </button>
+          {failedAction ? (
+            <button
+              type="button"
+              disabled={loading || busy}
+              onClick={() => void (failedAction === "load" ? loadRepositories() : cloneRepository())}
+            >
+              &gt;_retry {failedAction}
+            </button>
+          ) : null}
         </>
       )}
     </div>

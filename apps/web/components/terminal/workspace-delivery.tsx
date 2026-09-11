@@ -41,19 +41,30 @@ function hasChanges(status: SandboxGitStatus | null) {
     .some((line) => line.trim().length > 0 && !line.startsWith("##"));
 }
 
+const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/;
+
 export function WorkspaceDelivery() {
   const [status, setStatus] = useState<SandboxGitStatus | null>(null);
   const [diff, setDiff] = useState<SandboxGitDiff | null>(null);
   const [message, setMessage] = useState("delivery idle");
   const [busy, setBusy] = useState<"refresh" | "deliver" | null>(null);
+  const [failedAction, setFailedAction] = useState<"refresh" | "deliver" | null>(null);
   const [title, setTitle] = useState("Apply sandbox changes");
   const [body, setBody] = useState("");
+  const [branch, setBranch] = useState("");
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const dirty = useMemo(() => hasChanges(status), [status]);
   const reviewed = status !== null || diff !== null;
+  const branchValid = branch.trim().length === 0 || BRANCH_PATTERN.test(branch.trim());
+  const reviewSummary = !reviewed
+    ? "review the active repository before delivery"
+    : dirty
+      ? "changes detected · ready to prepare a pull request"
+      : "workspace clean · no pull request needed";
 
   const refresh = useCallback(async () => {
     setBusy("refresh");
+    setFailedAction(null);
     setPullRequestUrl(null);
     setMessage("reading git workspace");
     try {
@@ -68,6 +79,7 @@ export function WorkspaceDelivery() {
       setStatus(null);
       setDiff(null);
       setMessage(error instanceof Error ? error.message : "git workspace unavailable");
+      setFailedAction("refresh");
     } finally {
       setBusy(null);
     }
@@ -75,39 +87,60 @@ export function WorkspaceDelivery() {
 
   const deliver = useCallback(async () => {
     setBusy("deliver");
+    setFailedAction(null);
     setMessage("pushing branch and opening pull request");
     setPullRequestUrl(null);
     try {
       const response = await fetch("/api/github/workspace/pr", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, branch: branch.trim() || undefined }),
       });
       const payload = await readJson<PullRequestResponse>(response);
       if (!payload?.pullRequest) throw new Error("Pull request was not returned.");
       setPullRequestUrl(payload.pullRequest.htmlUrl);
-      setMessage(`pull request #${payload.pullRequest.number} opened`);
+      setMessage(`pull request #${payload.pullRequest.number} opened from ${payload.pullRequest.head}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "delivery failed");
+      setFailedAction("deliver");
     } finally {
       setBusy(null);
     }
-  }, [body, title]);
+  }, [body, branch, title]);
 
   return (
     <aside className={styles.deliveryPanel} aria-label="GitHub delivery controls">
       <div className={styles.deliveryHeader}>
         <span role="status" aria-live="polite">{message}</span>
         <button type="button" disabled={busy !== null} onClick={() => void refresh()}>&gt;_review</button>
+        {failedAction ? (
+          <button type="button" disabled={busy !== null} onClick={() => void (failedAction === "refresh" ? refresh() : deliver())}>
+            &gt;_retry {failedAction}
+          </button>
+        ) : null}
       </div>
       {reviewed ? (
         <>
           <div className={styles.deliveryBody}>
+            <p className={styles.reviewSummary}>{reviewSummary}</p>
             <pre aria-label="Git status">{status?.output || "clone a repository, edit files, then review changes"}</pre>
             {diff?.output ? <pre aria-label="Git diff preview">{diff.output}</pre> : null}
+            {diff?.truncated ? (
+              <p className={styles.reviewSummary}>diff truncated · review the remaining changes in the terminal</p>
+            ) : null}
             <label>
               <span>title</span>
               <input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+            <label>
+              <span>branch</span>
+              <input
+                value={branch}
+                maxLength={120}
+                placeholder="auto-generate a sandboxedcli branch"
+                onChange={(event) => setBranch(event.target.value)}
+              />
+              {!branchValid ? <small className={styles.fieldError}>use letters, numbers, `.`, `_`, `/`, or `-`</small> : null}
             </label>
             <label>
               <span>body</span>
@@ -115,7 +148,7 @@ export function WorkspaceDelivery() {
             </label>
           </div>
           <div className={styles.deliveryFooter}>
-            <button type="button" disabled={busy !== null || !dirty || title.trim().length === 0} onClick={() => void deliver()}>
+            <button type="button" disabled={busy !== null || !dirty || title.trim().length === 0 || !branchValid} onClick={() => void deliver()}>
               &gt;_open pr
             </button>
             {pullRequestUrl ? <a href={pullRequestUrl} rel="noreferrer" target="_blank">view pull request</a> : null}

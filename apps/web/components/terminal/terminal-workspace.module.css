@@ -31,6 +31,11 @@
   white-space: nowrap;
 }
 
+.repoContext {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
 .repoBar a,
 .repoBar button,
 .repoBar select {
@@ -150,11 +155,43 @@
 }
 
 .terminalPanel {
+  position: relative;
   height: 565px;
   padding: 30px 36px;
   overflow: hidden;
   border-radius: var(--terminal-radius);
   background: var(--color-terminal-panel);
+}
+
+.connectionStatus {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  z-index: 1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+.retryTerminal {
+  position: absolute;
+  top: 30px;
+  right: 18px;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-accent);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.retryTerminal:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
 }
 
 .xtermHost {
@@ -261,6 +298,11 @@
   padding: 10px 12px;
 }
 
+.reviewSummary {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
 .deliveryBody pre {
   max-height: 86px;
   margin: 0;
@@ -287,6 +329,11 @@
   background: var(--color-canvas);
   font: inherit;
   resize: vertical;
+}
+
+.fieldError {
+  grid-column: 2;
+  color: #b42318;
 }
 
 .deliveryFooter {
@@ -386,6 +433,10 @@
     flex: 1 0 100%;
   }
 
+  .repoContext {
+    flex: 1 0 100%;
+  }
+
   .repoBar select {
     max-width: min(100%, 260px);
   }
@@ -400,6 +451,17 @@
     min-height: 470px;
     height: calc(100svh - 190px);
     padding: 24px 20px;
+  }
+
+  .connectionStatus,
+  .retryTerminal {
+    position: static;
+    display: inline-block;
+    margin: 0 12px 8px 0;
+  }
+
+  .retryTerminal {
+    font-size: inherit;
   }
 
   .footer {
@@ -427,6 +489,10 @@
 
   .deliveryBody label {
     grid-template-columns: 1fr;
+  }
+
+  .fieldError {
+    grid-column: auto;
   }
 
   .persistenceNote {
