@@ -43,6 +43,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selected, setSelected] = useState("");
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("checking github");
 
@@ -52,27 +53,32 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   );
 
   const loadRepositories = useCallback(async () => {
+    setLoading(true);
     setMessage("checking github");
-    const session = await readJson<SessionResponse>(
-      await fetch("/api/auth/session", { cache: "no-store" }),
-    );
-    if (!session?.authenticated) {
-      setAuthenticated(false);
-      setMessage("github login required");
-      return;
-    }
+    try {
+      const session = await readJson<SessionResponse>(
+        await fetch("/api/auth/session", { cache: "no-store" }),
+      );
+      if (!session?.authenticated) {
+        setAuthenticated(false);
+        setMessage("github login required");
+        return;
+      }
 
-    setAuthenticated(true);
-    setMessage(`github connected${session.user?.login ? ` as ${session.user.login}` : ""}`);
-    const repos = await readJson<ReposResponse>(await fetch("/api/github/repos", { cache: "no-store" }));
-    const nextRepositories = repos?.repositories ?? [];
-    setRepositories(nextRepositories);
-    setSelected((current) =>
-      nextRepositories.some((repository) => repository.fullName === current)
-        ? current
-        : nextRepositories[0]?.fullName ?? "",
-    );
-    if (nextRepositories.length === 0) setMessage("no repositories found");
+      setAuthenticated(true);
+      setMessage(`github connected${session.user?.login ? ` as ${session.user.login}` : ""} · loading repositories`);
+      const repos = await readJson<ReposResponse>(await fetch("/api/github/repos", { cache: "no-store" }));
+      const nextRepositories = repos?.repositories ?? [];
+      setRepositories(nextRepositories);
+      setSelected((current) =>
+        nextRepositories.some((repository) => repository.fullName === current)
+          ? current
+          : nextRepositories[0]?.fullName ?? "",
+      );
+      setMessage(nextRepositories.length === 0 ? "no repositories found" : `${nextRepositories.length} repositories ready`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -93,7 +99,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const cloneRepository = useCallback(async () => {
     if (!selectedRepo) return;
     setBusy(true);
-    setMessage(`cloning ${selectedRepo.fullName}`);
+    setMessage(`cloning ${selectedRepo.fullName} · opening workspace`);
     try {
       const body = await readJson<CloneResponse>(
         await fetch("/api/github/repos/clone", {
@@ -117,7 +123,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   }, [onRepositoryReady, selectedRepo]);
 
   return (
-    <div className={styles.repoBar} aria-label="GitHub repository controls">
+    <div className={styles.repoBar} aria-busy={loading || busy} aria-label="GitHub repository controls">
       <span className={styles.repoStatus} role="status" aria-live="polite">
         {message}
       </span>
@@ -127,7 +133,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
         <>
           <select
             aria-label="GitHub repository"
-            disabled={busy || repositories.length === 0}
+            disabled={loading || busy || repositories.length === 0}
             value={selected}
             onChange={(event) => setSelected(event.target.value)}
           >
@@ -137,7 +143,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
               </option>
             ))}
           </select>
-          <button type="button" disabled={busy || !selectedRepo} onClick={() => void cloneRepository()}>
+          <button type="button" disabled={loading || busy || !selectedRepo} onClick={() => void cloneRepository()}>
             &gt;_clone
           </button>
         </>
