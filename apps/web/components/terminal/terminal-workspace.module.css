@@ -331,6 +331,11 @@
   resize: vertical;
 }
 
+.fieldError {
+  grid-column: 2;
+  color: #b42318;
+}
+
 .deliveryFooter {
   justify-content: flex-end;
   border-top: 1px solid var(--color-border);
@@ -473,6 +478,10 @@
 
   .deliveryBody label {
     grid-template-columns: 1fr;
+  }
+
+  .fieldError {
+    grid-column: auto;
   }
 
   .persistenceNote {

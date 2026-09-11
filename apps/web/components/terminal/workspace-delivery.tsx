@@ -41,6 +41,8 @@ function hasChanges(status: SandboxGitStatus | null) {
     .some((line) => line.trim().length > 0 && !line.startsWith("##"));
 }
 
+const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/;
+
 export function WorkspaceDelivery() {
   const [status, setStatus] = useState<SandboxGitStatus | null>(null);
   const [diff, setDiff] = useState<SandboxGitDiff | null>(null);
@@ -48,9 +50,11 @@ export function WorkspaceDelivery() {
   const [busy, setBusy] = useState<"refresh" | "deliver" | null>(null);
   const [title, setTitle] = useState("Apply sandbox changes");
   const [body, setBody] = useState("");
+  const [branch, setBranch] = useState("");
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const dirty = useMemo(() => hasChanges(status), [status]);
   const reviewed = status !== null || diff !== null;
+  const branchValid = branch.trim().length === 0 || BRANCH_PATTERN.test(branch.trim());
   const reviewSummary = !reviewed
     ? "review the active repository before delivery"
     : dirty
@@ -86,12 +90,12 @@ export function WorkspaceDelivery() {
       const response = await fetch("/api/github/workspace/pr", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, branch: branch.trim() || undefined }),
       });
       const payload = await readJson<PullRequestResponse>(response);
       if (!payload?.pullRequest) throw new Error("Pull request was not returned.");
       setPullRequestUrl(payload.pullRequest.htmlUrl);
-      setMessage(`pull request #${payload.pullRequest.number} opened`);
+      setMessage(`pull request #${payload.pullRequest.number} opened from ${payload.pullRequest.head}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "delivery failed");
     } finally {
@@ -116,12 +120,22 @@ export function WorkspaceDelivery() {
               <input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label>
+              <span>branch</span>
+              <input
+                value={branch}
+                maxLength={120}
+                placeholder="auto-generate a sandboxedcli branch"
+                onChange={(event) => setBranch(event.target.value)}
+              />
+              {!branchValid ? <small className={styles.fieldError}>use letters, numbers, `.`, `_`, `/`, or `-`</small> : null}
+            </label>
+            <label>
               <span>body</span>
               <textarea value={body} rows={3} onChange={(event) => setBody(event.target.value)} />
             </label>
           </div>
           <div className={styles.deliveryFooter}>
-            <button type="button" disabled={busy !== null || !dirty || title.trim().length === 0} onClick={() => void deliver()}>
+            <button type="button" disabled={busy !== null || !dirty || title.trim().length === 0 || !branchValid} onClick={() => void deliver()}>
               &gt;_open pr
             </button>
             {pullRequestUrl ? <a href={pullRequestUrl} rel="noreferrer" target="_blank">view pull request</a> : null}
