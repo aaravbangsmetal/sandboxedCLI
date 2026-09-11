@@ -276,7 +276,11 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       const stderr = await result.stderr();
       throw new Error(stderr || stdout || "Sandbox environment health check failed.");
     }
-    return parseEnvironmentReport(stdout);
+    try {
+      return parseEnvironmentReport(stdout);
+    } catch {
+      return degradedEnvironmentReport(stdout.trim().slice(0, 200) || "invalid health json");
+    }
   }
 
   async cloneRepository(

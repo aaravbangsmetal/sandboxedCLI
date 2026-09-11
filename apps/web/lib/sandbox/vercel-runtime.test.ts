@@ -119,6 +119,21 @@ describe("VercelSandboxRuntime", () => {
     expect(sandbox.runCommand).toHaveBeenCalledWith("sh", expect.arrayContaining(["-lc"]));
   });
 
+  it("degrades environment health when the health command returns invalid JSON", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "<html>not json</html>",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().checkEnvironment("sandboxed-cli-test")).resolves.toMatchObject({
+      status: "degraded",
+      checks: [{ name: "sandboxed-health", status: "fail", detail: "<html>not json</html>" }],
+    });
+  });
+
   it("degrades environment health when the custom health command is unavailable", async () => {
     const sandbox = fakeSandbox();
     sandbox.runCommand.mockResolvedValueOnce({
