@@ -125,6 +125,9 @@ export function WorkspaceDelivery() {
             <p className={styles.reviewSummary}>{reviewSummary}</p>
             <pre aria-label="Git status">{status?.output || "clone a repository, edit files, then review changes"}</pre>
             {diff?.output ? <pre aria-label="Git diff preview">{diff.output}</pre> : null}
+            {diff?.truncated ? (
+              <p className={styles.reviewSummary}>diff truncated · review the remaining changes in the terminal</p>
+            ) : null}
             <label>
               <span>title</span>
               <input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
