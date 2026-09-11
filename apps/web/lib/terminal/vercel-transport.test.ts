@@ -133,6 +133,27 @@ describe("VercelTerminalTransport", () => {
     transport.dispose();
   });
 
+  it("reports connection state transitions for workspace UI", async () => {
+    const socket = new FakeSocket();
+    const onStateChange = vi.fn();
+    const transport = new VercelTerminalTransport("terminal-one", {
+      fetcher: (async () => connectionResponse()) as typeof fetch,
+      websocketFactory: () => socket as unknown as WebSocket,
+      onStateChange,
+    });
+
+    transport.connect(() => undefined);
+    await flushPromises();
+    socket.open();
+    transport.dispose();
+
+    expect(onStateChange.mock.calls.map(([state]) => state)).toEqual([
+      "connecting",
+      "connected",
+      "disconnected",
+    ]);
+  });
+
   it("reports an exit frame without printing control JSON", async () => {
     const socket = new FakeSocket();
     const output = vi.fn();
