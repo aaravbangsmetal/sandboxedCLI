@@ -11,9 +11,10 @@ import styles from "./terminal-workspace.module.css";
 interface XtermPaneProps {
   transport: TerminalTransport;
   label: string;
+  startupCommand?: string;
 }
 
-export function XtermPane({ transport, label }: XtermPaneProps) {
+export function XtermPane({ transport, label, startupCommand }: XtermPaneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function XtermPane({ transport, label }: XtermPaneProps) {
     };
 
     transport.connect((data) => terminal.write(data));
+    if (startupCommand) transport.write(startupCommand);
     const inputSubscription = terminal.onData((data) => transport.write(data));
     const resizeObserver = new ResizeObserver(fit);
     resizeObserver.observe(host);
@@ -72,7 +74,7 @@ export function XtermPane({ transport, label }: XtermPaneProps) {
       transport.dispose();
       terminal.dispose();
     };
-  }, [transport]);
+  }, [startupCommand, transport]);
 
   return <div ref={hostRef} className={styles.xtermHost} role="region" aria-label={label} />;
 }
