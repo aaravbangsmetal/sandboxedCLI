@@ -36,7 +36,7 @@ async function readJson<T>(response: Response) {
 }
 
 interface RepositoryPickerProps {
-  onRepositoryReady: (directory: string) => void;
+  onRepositoryReady: (directory: string, alreadyPresent: boolean) => void;
 }
 
 const ACTIVE_REPOSITORY_KEY = "sandboxedcli.active-repository.v1";
@@ -50,6 +50,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [failedAction, setFailedAction] = useState<"load" | "clone" | null>(null);
   const [message, setMessage] = useState("checking github");
 
   const selectedRepo = useMemo(
@@ -59,6 +60,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
 
   const loadRepositories = useCallback(async () => {
     setLoading(true);
+    setFailedAction(null);
     setMessage("checking github");
     try {
       const session = await readJson<SessionResponse>(
@@ -66,6 +68,8 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       );
       if (!session?.authenticated) {
         setAuthenticated(false);
+        setRepositories([]);
+        setSelected("");
         setMessage("github login required");
         return;
       }
@@ -75,35 +79,32 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       const repos = await readJson<ReposResponse>(await fetch("/api/github/repos", { cache: "no-store" }));
       const nextRepositories = repos?.repositories ?? [];
       setRepositories(nextRepositories);
-      setSelected((current) =>
-        nextRepositories.some((repository) => repository.fullName === current)
-          ? current
-          : nextRepositories[0]?.fullName ?? "",
-      );
+      setSelected((current) => {
+        if (nextRepositories.some((repository) => repository.fullName === current)) return current;
+        const stored = sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "";
+        if (stored && nextRepositories.some((repository) => repository.fullName === stored)) return stored;
+        return nextRepositories[0]?.fullName ?? "";
+      });
       setMessage(nextRepositories.length === 0 ? "no repositories found" : `${nextRepositories.length} repositories ready`);
+    } catch (error) {
+      setFailedAction("load");
+      setMessage(error instanceof Error ? error.message : "github unavailable");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let active = true;
     const timer = window.setTimeout(() => {
-      void loadRepositories().catch((error) => {
-        if (!active) return;
-        setAuthenticated(false);
-        setMessage(error instanceof Error ? error.message : "github unavailable");
-      });
+      void loadRepositories();
     }, 0);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [loadRepositories]);
 
   const cloneRepository = useCallback(async () => {
     if (!selectedRepo) return;
     setBusy(true);
+    setFailedAction(null);
     setMessage(`cloning ${selectedRepo.fullName} · opening workspace`);
     try {
       const body = await readJson<CloneResponse>(
@@ -121,8 +122,9 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       );
       setActiveRepository(body.clone.fullName);
       sessionStorage.setItem(ACTIVE_REPOSITORY_KEY, body.clone.fullName);
-      onRepositoryReady(body.clone.directory);
+      onRepositoryReady(body.clone.directory, body.clone.alreadyPresent);
     } catch (error) {
+      setFailedAction("clone");
       setMessage(error instanceof Error ? error.message : "clone failed");
     } finally {
       setBusy(false);
@@ -130,10 +132,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   }, [onRepositoryReady, selectedRepo]);
 
   const refreshRepositories = useCallback(() => {
-    void loadRepositories().catch((error) => {
-      setAuthenticated(false);
-      setMessage(error instanceof Error ? error.message : "github unavailable");
-    });
+    void loadRepositories();
   }, [loadRepositories]);
 
   return (
@@ -164,6 +163,15 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
           <button type="button" disabled={loading || busy || !selectedRepo} onClick={() => void cloneRepository()}>
             &gt;_clone
           </button>
+          {failedAction ? (
+            <button
+              type="button"
+              disabled={loading || busy}
+              onClick={() => void (failedAction === "load" ? loadRepositories() : cloneRepository())}
+            >
+              &gt;_retry {failedAction}
+            </button>
+          ) : null}
         </>
       )}
     </div>
