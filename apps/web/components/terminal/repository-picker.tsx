@@ -36,7 +36,7 @@ async function readJson<T>(response: Response) {
 }
 
 interface RepositoryPickerProps {
-  onRepositoryReady: (directory: string, alreadyPresent: boolean) => void;
+  onRepositoryReady: (directory: string) => void;
 }
 
 const ACTIVE_REPOSITORY_KEY = "sandboxedcli.active-repository.v1";
@@ -122,7 +122,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       );
       setActiveRepository(body.clone.fullName);
       sessionStorage.setItem(ACTIVE_REPOSITORY_KEY, body.clone.fullName);
-      onRepositoryReady(body.clone.directory, body.clone.alreadyPresent);
+      onRepositoryReady(body.clone.directory);
     } catch (error) {
       setFailedAction("clone");
       setMessage(error instanceof Error ? error.message : "clone failed");

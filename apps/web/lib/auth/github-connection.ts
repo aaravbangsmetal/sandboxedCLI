@@ -58,6 +58,12 @@ export async function saveGitHubConnection(
   if (error) throw new Error(`Unable to persist GitHub access: ${error.message}`);
 }
 
+export async function deleteGitHubConnection(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.from("github_connections").delete().eq("user_id", userId);
+  if (error) throw new Error(`Unable to clear GitHub access: ${error.message}`);
+}
+
 export async function getGitHubConnection(userId: string): Promise<GitHubConnection | null> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase

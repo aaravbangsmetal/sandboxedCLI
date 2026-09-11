@@ -118,6 +118,7 @@ export function TerminalWorkspace() {
   );
   const [tabs, setTabs] = useState<TerminalTab[]>(() => [materialize(DEFAULT_TAB)]);
   const [activeId, setActiveId] = useState<string>(DEFAULT_TAB.id);
+  const [activatedIds, setActivatedIds] = useState<Set<string>>(() => new Set([DEFAULT_TAB.id]));
   const [hydrated, setHydrated] = useState(false);
 
   const refreshTransports = useCallback(() => {
@@ -161,11 +162,15 @@ export function TerminalWorkspace() {
       try {
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as unknown;
         if (isStoredWorkspace(saved)) {
+          const nextActive = saved.tabs.some((tab) => tab.id === saved.activeId)
+            ? saved.activeId
+            : saved.tabs[0].id;
           setTabs((current) => {
             current.forEach((tab) => tab.transport.dispose());
             return saved.tabs.map(materialize);
           });
-          setActiveId(saved.tabs.some((tab) => tab.id === saved.activeId) ? saved.activeId : saved.tabs[0].id);
+          setActiveId(nextActive);
+          setActivatedIds(new Set([nextActive]));
         }
       } catch {
         localStorage.removeItem(STORAGE_KEY);
@@ -195,21 +200,18 @@ export function TerminalWorkspace() {
       });
       setTabs((current) => [...current, { ...tab, startupCommand }]);
       setActiveId(tab.id);
+      setActivatedIds((current) => new Set(current).add(tab.id));
     },
     [materialize, tabs],
   );
 
   const openRepository = useCallback(
-    (directory: string, alreadyPresent: boolean) => {
+    (directory: string) => {
       const command = changeDirectoryCommand(directory);
-      if (alreadyPresent) {
-        const current = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
-        if (command && current) current.transport.write(command);
-        return;
-      }
-      addTab(command || undefined);
+      const current = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
+      if (command && current) current.transport.write(command);
     },
-    [activeId, addTab, tabs],
+    [activeId, tabs],
   );
 
   const terminateRemoteTab = useCallback((terminalId: string) => {
@@ -239,6 +241,7 @@ export function TerminalWorkspace() {
         });
         setTabs([replacement]);
         setActiveId(replacement.id);
+        setActivatedIds(new Set([replacement.id]));
         return;
       }
 
@@ -253,6 +256,7 @@ export function TerminalWorkspace() {
 
   const selectAndFocusTab = useCallback((id: string) => {
     setActiveId(id);
+    setActivatedIds((current) => new Set(current).add(id));
     requestAnimationFrame(() => tabButtons.current.get(id)?.focus());
   }, []);
 
@@ -311,7 +315,7 @@ export function TerminalWorkspace() {
                   aria-controls={`terminal-panel-${tab.id}`}
                   aria-selected={tab.id === activeId}
                   tabIndex={tab.id === activeId ? 0 : -1}
-                  onClick={() => setActiveId(tab.id)}
+                  onClick={() => selectAndFocusTab(tab.id)}
                   onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
                 >
                   {tab.title}
@@ -341,18 +345,20 @@ export function TerminalWorkspace() {
             hidden={tab.id !== activeTab.id}
           >
             <p className={styles.connectionStatus} role="status" aria-live="polite">
-              terminal {connectionStates[tab.id] ?? "connecting"}
+              terminal {connectionStates[tab.id] ?? (activatedIds.has(tab.id) ? "connecting" : "idle")}
             </p>
             {connectionStates[tab.id] === "error" || connectionStates[tab.id] === "disconnected" ? (
               <button className={styles.retryTerminal} type="button" onClick={() => retryTerminal(tab.id)}>
                 &gt;_reconnect
               </button>
             ) : null}
-            <XtermPane
-              transport={tab.transport}
-              label={`${tab.title} interactive cloud terminal`}
-              startupCommand={tab.startupCommand}
-            />
+            {activatedIds.has(tab.id) ? (
+              <XtermPane
+                transport={tab.transport}
+                label={`${tab.title} interactive cloud terminal`}
+                startupCommand={tab.startupCommand}
+              />
+            ) : null}
           </div>
         ))}
         {!hydrated && <div className={styles.terminalPanel} aria-label="Loading cloud terminal" />}

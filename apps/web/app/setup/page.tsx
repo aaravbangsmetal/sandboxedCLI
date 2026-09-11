@@ -1,3 +1,4 @@
+import { requireGitHubPageSession } from "@/lib/auth/require-page-session";
 import { AnimatedOnboarding } from "@/components/onboarding/AnimatedOnboarding";
 import type { SequenceLine } from "@/components/onboarding/TerminalSequence";
 
@@ -25,7 +26,8 @@ const setupLines: readonly SequenceLine[] = [
   { segments: [{ text: ">_requesting persistent workspace", tone: "muted" }] },
 ] as const;
 
-export default function SetupPage() {
+export default async function SetupPage() {
+  await requireGitHubPageSession();
   return (
     <AnimatedOnboarding
       lines={setupLines}

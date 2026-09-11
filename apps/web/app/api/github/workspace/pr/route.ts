@@ -1,8 +1,10 @@
 import { requireGitHubSession } from "@/lib/auth/require-session";
-import { createGitHubPullRequest } from "@/lib/github/client";
+import { createGitHubPullRequest, fetchGitHubRepository, GitHubApiError } from "@/lib/github/client";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
+import { PullRequestCreateError } from "@/lib/sandbox/errors";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
+import { assertRateLimit } from "@/lib/sandbox/rate-limit";
 import { assertSafeMutationRequest } from "@/lib/sandbox/request-security";
 import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
@@ -33,26 +35,40 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
+    assertRateLimit(`${session.account.id}:pr`, 8, 10 * 60_000);
     const input = parsePullRequestRequest(await request.json());
     const identity = await getOrCreateWorkspaceIdentity();
-    const pushed = await withSandboxMutationLock(identity.sandboxName, () =>
-      getSandboxRuntime().commitAndPushActiveRepository(identity.sandboxName, session.accessToken, {
+    const sandboxRuntime = getSandboxRuntime();
+    const pushed = await withSandboxMutationLock(identity.sandboxName, async () => {
+      const active = await sandboxRuntime.readActiveRepository(identity.sandboxName);
+      const repository = await fetchGitHubRepository(session.accessToken, active.fullName);
+      if (!repository.permissions.push) {
+        throw new GitHubApiError("Repository cannot be updated with the current GitHub access.", 403);
+      }
+      return sandboxRuntime.commitAndPushActiveRepository(identity.sandboxName, session.accessToken, {
         branch: input.branch,
         message: input.title,
-      }),
-    );
-    const pullRequest = await createGitHubPullRequest(session.accessToken, pushed.fullName, {
-      title: input.title,
-      body:
-        input.body ||
-        [
-          "Created from sandboxed/cli.",
-          "",
-          `Sandbox commit: ${pushed.commitSha}`,
-        ].join("\n"),
-      head: pushed.branch,
-      base: pushed.baseBranch,
+        fullName: repository.fullName,
+        defaultBranch: repository.defaultBranch,
+      });
     });
+    let pullRequest;
+    try {
+      pullRequest = await createGitHubPullRequest(session.accessToken, pushed.fullName, {
+        title: input.title,
+        body:
+          input.body ||
+          [
+            "Created from sandboxed/cli.",
+            "",
+            `Sandbox commit: ${pushed.commitSha}`,
+          ].join("\n"),
+        head: pushed.branch,
+        base: pushed.baseBranch,
+      });
+    } catch (error) {
+      throw new PullRequestCreateError(pushed, error);
+    }
     return sandboxJson({ pushed, pullRequest });
   } catch (error) {
     return sandboxErrorResponse(error);

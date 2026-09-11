@@ -37,4 +37,17 @@ describe("sandbox mutation security", () => {
       ),
     ).toThrow(UnsafeSandboxRequestError);
   });
+
+  it("ignores a spoofed forwarded host", () => {
+    expect(() =>
+      assertSafeMutationRequest(
+        request({
+          "content-type": "application/json",
+          host: "sandboxedcli.xyz",
+          "x-forwarded-host": "attacker.example",
+          origin: "https://attacker.example",
+        }),
+      ),
+    ).toThrow(UnsafeSandboxRequestError);
+  });
 });

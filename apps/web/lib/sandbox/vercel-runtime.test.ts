@@ -119,6 +119,21 @@ describe("VercelSandboxRuntime", () => {
     expect(sandbox.runCommand).toHaveBeenCalledWith("sh", expect.arrayContaining(["-lc"]));
   });
 
+  it("degrades environment health when the health command returns invalid JSON", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: async () => "<html>not json</html>",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().checkEnvironment("sandboxed-cli-test")).resolves.toMatchObject({
+      status: "degraded",
+      checks: [{ name: "sandboxed-health", status: "fail", detail: "<html>not json</html>" }],
+    });
+  });
+
   it("degrades environment health when the custom health command is unavailable", async () => {
     const sandbox = fakeSandbox();
     sandbox.runCommand.mockResolvedValueOnce({
@@ -261,6 +276,8 @@ describe("VercelSandboxRuntime", () => {
       new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
         branch: "sandboxedcli/test-change",
         message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
       }),
     ).resolves.toEqual({
       fullName: "octocat/hello-world",
@@ -294,8 +311,40 @@ describe("VercelSandboxRuntime", () => {
       new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
         branch: "sandboxedcli/test-change",
         message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
       }),
     ).rejects.toThrow("There are no repository changes to deliver.");
+  });
+
+  it("refuses delivery onto the repository default branch", async () => {
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "main",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow('Refusing to push delivery onto protected branch "main".');
+  });
+
+  it("refuses delivery when staged files look like secrets", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 20,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow("Delivery refused because staged files look like secrets.");
   });
 
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {
@@ -310,5 +359,15 @@ describe("VercelSandboxRuntime", () => {
 
     await runtime.destroy("sandboxed-cli-test");
     expect(stopped.delete).toHaveBeenCalledWith({ deleteOrphanSnapshots: true });
+  });
+
+  it("does not extend a stopped sandbox", async () => {
+    const stopped = fakeSandbox("stopped");
+    sdk.get.mockResolvedValueOnce(stopped);
+
+    await expect(new VercelSandboxRuntime().extend("sandboxed-cli-test", 300_000)).resolves.toMatchObject({
+      state: "stopped",
+    });
+    expect(stopped.extendTimeout).not.toHaveBeenCalled();
   });
 });

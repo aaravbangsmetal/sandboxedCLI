@@ -170,7 +170,7 @@ export class VercelTerminalTransport implements TerminalTransport {
     this.clearReconnectTimer();
     if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
       this.onStateChange?.("error");
-      this.onOutput?.("\r\n\x1b[90mterminal reconnect paused; use >_start to retry\x1b[0m\r\n");
+      this.onOutput?.("\r\n\x1b[90mterminal reconnect paused; use >_reconnect to retry\x1b[0m\r\n");
       return;
     }
     const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];

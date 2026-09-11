@@ -29,6 +29,7 @@ describe("GET /api/auth/github/callback", () => {
       avatarUrl: "https://avatars.example/octocat",
       htmlUrl: "https://github.com/octocat",
       email: "octocat@example.com",
+      grantedScope: "read:user user:email repo",
     });
   });
 

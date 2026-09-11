@@ -34,3 +34,28 @@ export class RepositoryWorkspaceError extends Error {
     this.name = "RepositoryWorkspaceError";
   }
 }
+
+export class ProtectedBranchError extends Error {
+  constructor(branch: string) {
+    super(`Refusing to push delivery onto protected branch "${branch}".`);
+    this.name = "ProtectedBranchError";
+  }
+}
+
+export class SensitiveWorkspaceFilesError extends Error {
+  constructor() {
+    super("Delivery refused because staged files look like secrets.");
+    this.name = "SensitiveWorkspaceFilesError";
+  }
+}
+
+export class PullRequestCreateError extends Error {
+  constructor(
+    readonly pushed: { fullName: string; branch: string; baseBranch: string; commitSha: string },
+    cause?: unknown,
+  ) {
+    super(`Branch ${pushed.branch} was pushed, but GitHub did not open a pull request.`);
+    this.name = "PullRequestCreateError";
+    if (cause instanceof Error) this.cause = cause;
+  }
+}

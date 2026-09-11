@@ -1,11 +1,9 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { createHmac } from "node:crypto";
 
 import { requireGitHubSession } from "@/lib/auth/require-session";
 
-const COOKIE_NAME = "sandboxedcli_workspace";
 const WORKSPACE_ID_PATTERN = /^[a-f0-9]{64}$/;
 
 export interface WorkspaceIdentity {
@@ -18,26 +16,6 @@ function sessionSecret() {
   if (configured) return configured;
   if (process.env.NODE_ENV !== "production") return "sandboxed-cli-local-development-only";
   throw new Error("SANDBOX_SESSION_SECRET is required in production.");
-}
-
-function signature(workspaceId: string) {
-  return createHmac("sha256", sessionSecret()).update(workspaceId).digest("hex");
-}
-
-export function serializeWorkspaceCookie(workspaceId: string) {
-  if (!WORKSPACE_ID_PATTERN.test(workspaceId)) throw new Error("Invalid workspace ID.");
-  return `${workspaceId}.${signature(workspaceId)}`;
-}
-
-export function parseWorkspaceCookie(value: string | undefined) {
-  if (!value) return null;
-  const [workspaceId, suppliedSignature, extra] = value.split(".");
-  if (extra || !WORKSPACE_ID_PATTERN.test(workspaceId) || !suppliedSignature) return null;
-
-  const expected = Buffer.from(signature(workspaceId), "hex");
-  const supplied = Buffer.from(suppliedSignature, "hex");
-  if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
-  return workspaceId;
 }
 
 export function deriveSandboxName(workspaceId: string) {
@@ -68,5 +46,5 @@ export async function getOrCreateWorkspaceIdentity() {
 }
 
 export async function clearWorkspaceIdentity() {
-  (await cookies()).delete(COOKIE_NAME);
+  return;
 }

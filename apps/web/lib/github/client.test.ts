@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createGitHubPullRequest,
+  fetchGitHubRepository,
   fetchGitHubViewer,
   listGitHubRepositories,
 } from "./client";
@@ -17,13 +18,16 @@ describe("GitHub client", () => {
       vi.fn(async (url: string | URL | Request) => {
         const href = String(url);
         if (href.endsWith("/user")) {
-          return Response.json({
-            id: 1,
-            login: "octocat",
-            name: null,
-            avatar_url: "https://avatars.githubusercontent.com/u/1",
-            html_url: "https://github.com/octocat",
-          });
+          return new Response(
+            JSON.stringify({
+              id: 1,
+              login: "octocat",
+              name: null,
+              avatar_url: "https://avatars.githubusercontent.com/u/1",
+              html_url: "https://github.com/octocat",
+            }),
+            { headers: { "content-type": "application/json", "x-oauth-scopes": "read:user, repo" } },
+          );
         }
         if (href.endsWith("/user/emails")) {
           return Response.json([{ email: "octocat@example.com", primary: true, verified: true }]);
@@ -47,6 +51,7 @@ describe("GitHub client", () => {
     await expect(fetchGitHubViewer("gho_token")).resolves.toMatchObject({
       login: "octocat",
       email: "octocat@example.com",
+      grantedScope: "read:user repo",
     });
     await expect(listGitHubRepositories("gho_token")).resolves.toMatchObject([
       { fullName: "octocat/hello-world", permissions: { pull: true, push: true } },
@@ -73,6 +78,29 @@ describe("GitHub client", () => {
 
     await expect(listGitHubRepositories("gho_token")).resolves.toHaveLength(101);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetches a single repository by owner and name", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      expect(String(url)).toBe("https://api.github.com/repos/octocat/hello-world");
+      return Response.json({
+        id: 10,
+        name: "hello-world",
+        full_name: "octocat/hello-world",
+        private: false,
+        html_url: "https://github.com/octocat/hello-world",
+        clone_url: "https://github.com/octocat/hello-world.git",
+        default_branch: "main",
+        pushed_at: null,
+        permissions: { pull: true, push: true },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchGitHubRepository("gho_token", "octocat/hello-world")).resolves.toMatchObject({
+      fullName: "octocat/hello-world",
+      permissions: { pull: true, push: true },
+    });
   });
 
   it("creates a pull request for a pushed sandbox branch", async () => {

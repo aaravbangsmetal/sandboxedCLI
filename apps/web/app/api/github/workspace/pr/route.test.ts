@@ -6,6 +6,7 @@ const auth = vi.hoisted(() => ({
 
 const github = vi.hoisted(() => ({
   createGitHubPullRequest: vi.fn(),
+  fetchGitHubRepository: vi.fn(),
 }));
 
 const identity = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const lock = vi.hoisted(() => ({
 const runtime = vi.hoisted(() => ({
   sandboxRuntime: {
     commitAndPushActiveRepository: vi.fn(),
+    readActiveRepository: vi.fn(),
   },
   getSandboxRuntime: vi.fn(),
 }));
@@ -27,7 +29,10 @@ vi.mock("@/lib/auth/require-session", () => ({
   AuthenticationRequiredError: class AuthenticationRequiredError extends Error {},
   requireGitHubSession: auth.requireGitHubSession,
 }));
-vi.mock("@/lib/github/client", () => github);
+vi.mock("@/lib/github/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/github/client")>();
+  return { ...actual, ...github };
+});
 vi.mock("@/lib/sandbox/identity", () => identity);
 vi.mock("@/lib/sandbox/mutation-lock", () => lock);
 vi.mock("@/lib/sandbox/runtime", () => ({
@@ -51,12 +56,25 @@ function prRequest(body: unknown) {
 describe("POST /api/github/workspace/pr", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    auth.requireGitHubSession.mockResolvedValue({ accessToken: "gho_token" });
+    auth.requireGitHubSession.mockResolvedValue({
+      accessToken: "gho_token",
+      account: { id: "supabase-user-id" },
+    });
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-test" });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
       work(),
     );
     runtime.getSandboxRuntime.mockReturnValue(runtime.sandboxRuntime);
+    runtime.sandboxRuntime.readActiveRepository.mockResolvedValue({
+      fullName: "octocat/hello-world",
+      defaultBranch: "main",
+      directory: "/vercel/sandbox/repos/octocat__hello-world",
+    });
+    github.fetchGitHubRepository.mockResolvedValue({
+      fullName: "octocat/hello-world",
+      defaultBranch: "main",
+      permissions: { admin: false, maintain: false, push: true, triage: false, pull: true },
+    });
     runtime.sandboxRuntime.commitAndPushActiveRepository.mockResolvedValue({
       fullName: "octocat/hello-world",
       branch: "sandboxedcli/test-change",
@@ -87,7 +105,12 @@ describe("POST /api/github/workspace/pr", () => {
     expect(runtime.sandboxRuntime.commitAndPushActiveRepository).toHaveBeenCalledWith(
       "sandboxed-cli-test",
       "gho_token",
-      { branch: "sandboxedcli/test-change", message: "Apply sandbox changes" },
+      {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      },
     );
     expect(github.createGitHubPullRequest).toHaveBeenCalledWith(
       "gho_token",
@@ -98,5 +121,21 @@ describe("POST /api/github/workspace/pr", () => {
         base: "main",
       }),
     );
+  });
+
+  it("returns the pushed branch when GitHub cannot open the pull request", async () => {
+    github.createGitHubPullRequest.mockRejectedValue(new Error("Validation Failed"));
+    const response = await POST(
+      prRequest({
+        title: "Apply sandbox changes",
+        branch: "sandboxedcli/test-change",
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "pull_request_create_failed",
+      pushed: { branch: "sandboxedcli/test-change", commitSha: "0123456789abcdef0123456789abcdef01234567" },
+    });
   });
 });

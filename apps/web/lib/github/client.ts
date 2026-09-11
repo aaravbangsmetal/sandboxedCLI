@@ -91,6 +91,11 @@ function githubHeaders(accessToken?: string) {
 }
 
 async function githubJson<T>(url: string, init: RequestInit = {}) {
+  const { body } = await githubRequest<T>(url, init);
+  return body;
+}
+
+async function githubRequest<T>(url: string, init: RequestInit = {}) {
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -107,7 +112,7 @@ async function githubJson<T>(url: string, init: RequestInit = {}) {
     throw new GitHubApiError(message, response.status);
   }
   if (!body) throw new GitHubApiError("GitHub returned an empty response.", response.status);
-  return body;
+  return { body, response };
 }
 
 function normalizeViewer(user: GitHubUserResponse, email: string | null): GitHubViewer {
@@ -141,13 +146,17 @@ function primaryEmail(emails: GitHubEmailResponse[]) {
 }
 
 export async function fetchGitHubViewer(accessToken: string) {
-  const user = await githubJson<GitHubUserResponse>("https://api.github.com/user", {
+  const { body: user, response } = await githubRequest<GitHubUserResponse>("https://api.github.com/user", {
     headers: githubHeaders(accessToken),
   });
   const emails = await githubJson<GitHubEmailResponse[]>("https://api.github.com/user/emails", {
     headers: githubHeaders(accessToken),
   }).catch(() => []);
-  return normalizeViewer(user, primaryEmail(emails));
+  const grantedScope = (response.headers.get("x-oauth-scopes") ?? "")
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .join(" ");
+  return { ...normalizeViewer(user, primaryEmail(emails)), grantedScope };
 }
 
 function normalizeRepository(repo: GitHubRepoResponse): GitHubRepository {
@@ -180,6 +189,26 @@ function normalizeRepository(repo: GitHubRepoResponse): GitHubRepository {
       pull: repo.permissions?.pull === true,
     },
   };
+}
+
+const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+export function parseRepositoryFullName(fullName: string) {
+  if (!REPOSITORY_FULL_NAME_PATTERN.test(fullName)) {
+    throw new SyntaxError("Repository names must use the owner/name format.");
+  }
+  const [owner, repo] = fullName.split("/");
+  return { owner, repo };
+}
+
+export async function fetchGitHubRepository(accessToken: string, fullName: string) {
+  const { owner, repo } = parseRepositoryFullName(fullName);
+  return normalizeRepository(
+    await githubJson<GitHubRepoResponse>(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { headers: githubHeaders(accessToken) },
+    ),
+  );
 }
 
 export async function listGitHubRepositories(accessToken: string) {

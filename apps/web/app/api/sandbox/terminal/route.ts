@@ -1,6 +1,8 @@
 import { getOrCreateWorkspaceIdentity, getWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { requireGitHubSession } from "@/lib/auth/require-session";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
+import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
+import { assertRateLimit } from "@/lib/sandbox/rate-limit";
 import { assertSafeMutationRequest } from "@/lib/sandbox/request-security";
 import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 import { validateTerminalId } from "@/lib/sandbox/terminal-id";
@@ -20,11 +22,19 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { terminalId?: unknown; cols?: unknown; rows?: unknown };
     const terminalId = validateTerminalId(typeof body.terminalId === "string" ? body.terminalId : "");
     const session = await requireGitHubSession();
+    assertRateLimit(`${session.account.id}:terminal`, 30, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
-    const connection = await getSandboxRuntime().openTerminal(identity.sandboxName, terminalId, {
-      cols: terminalSize(body.cols, 80, 20, 500),
-      rows: terminalSize(body.rows, 24, 5, 200),
-    }, session.accessToken);
+    const connection = await withSandboxMutationLock(identity.sandboxName, () =>
+      getSandboxRuntime().openTerminal(
+        identity.sandboxName,
+        terminalId,
+        {
+          cols: terminalSize(body.cols, 80, 20, 500),
+          rows: terminalSize(body.rows, 24, 5, 200),
+        },
+        session.accessToken,
+      ),
+    );
     return sandboxJson(connection);
   } catch (error) {
     return sandboxErrorResponse(error);
@@ -38,7 +48,11 @@ export async function DELETE(request: Request) {
     const terminalId = validateTerminalId(typeof body.terminalId === "string" ? body.terminalId : "");
     await requireGitHubSession();
     const identity = await getWorkspaceIdentity();
-    if (identity) await getSandboxRuntime().killTerminal(identity.sandboxName, terminalId);
+    if (identity) {
+      await withSandboxMutationLock(identity.sandboxName, () =>
+        getSandboxRuntime().killTerminal(identity.sandboxName, terminalId),
+      );
+    }
     return sandboxJson({ terminated: true });
   } catch (error) {
     return sandboxErrorResponse(error);

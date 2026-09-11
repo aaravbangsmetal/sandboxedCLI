@@ -2,6 +2,7 @@ import "server-only";
 
 const pendingMutations = new Map<string, Promise<void>>();
 
+/** Serializes mutations per sandbox name inside this server isolate. */
 export async function withSandboxMutationLock<T>(name: string, mutation: () => Promise<T>) {
   const previous = pendingMutations.get(name) ?? Promise.resolve();
   let release!: () => void;

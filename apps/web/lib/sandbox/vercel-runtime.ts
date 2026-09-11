@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type {
   SandboxEnvironmentCheck,
   PauseResult,
+  SandboxActiveRepository,
   SandboxEnvironmentReport,
   SandboxGitDiff,
   SandboxGitStatus,
@@ -18,9 +19,11 @@ import type {
 import { hasVercelSandboxCredentials, sandboxConfig } from "./config";
 import {
   NoRepositoryChangesError,
+  ProtectedBranchError,
   RepositoryWorkspaceError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
+  SensitiveWorkspaceFilesError,
 } from "./errors";
 import { tmuxSessionName } from "./terminal-id";
 
@@ -124,6 +127,16 @@ function repositoryDirectory(fullName: string) {
 function assertSafeBranch(branch: string) {
   if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
     throw new Error("Branch names may only contain safe Git ref characters.");
+  }
+}
+
+const PROTECTED_BRANCH_NAMES = new Set(["main", "master", "trunk", "production"]);
+
+function assertDeliveryBranch(branch: string, defaultBranch: string) {
+  assertSafeBranch(branch);
+  const normalized = branch.toLowerCase();
+  if (normalized === defaultBranch.toLowerCase() || PROTECTED_BRANCH_NAMES.has(normalized)) {
+    throw new ProtectedBranchError(branch);
   }
 }
 
@@ -276,7 +289,11 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       const stderr = await result.stderr();
       throw new Error(stderr || stdout || "Sandbox environment health check failed.");
     }
-    return parseEnvironmentReport(stdout);
+    try {
+      return parseEnvironmentReport(stdout);
+    } catch {
+      return degradedEnvironmentReport(stdout.trim().slice(0, 200) || "invalid health json");
+    }
   }
 
   async cloneRepository(
@@ -406,13 +423,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     };
   }
 
-  async commitAndPushActiveRepository(
-    name: string,
-    accessToken: string,
-    input: { branch: string; message: string },
-  ): Promise<SandboxPushedBranch> {
-    assertSafeBranch(input.branch);
-    if (!input.message.trim()) throw new SyntaxError("Commit message is required.");
+  async readActiveRepository(name: string): Promise<SandboxActiveRepository> {
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
       cmd: "sh",
@@ -425,18 +436,64 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
           'test -d "$repo/.git"',
+          'printf "%s\n%s\n%s\n" "$repo" "$full_name" "$base_branch"',
+        ].join("\n"),
+      ],
+      cwd: sandboxConfig.cwd,
+      timeoutMs: 15_000,
+    });
+    if (result.exitCode === 18) throw new RepositoryWorkspaceError();
+    const [directory, fullName, defaultBranch] = (await commandStdoutOrThrow(result, "Active repository lookup failed."))
+      .trim()
+      .split("\n");
+    if (!directory || !fullName || !REPOSITORY_FULL_NAME_PATTERN.test(fullName) || !defaultBranch) {
+      throw new RepositoryWorkspaceError();
+    }
+    const expectedDirectory = repositoryDirectory(fullName);
+    if (directory !== expectedDirectory) throw new RepositoryWorkspaceError("Active repository metadata does not match the workspace path.");
+    return { directory, fullName, defaultBranch };
+  }
+
+  async commitAndPushActiveRepository(
+    name: string,
+    accessToken: string,
+    input: { branch: string; message: string; fullName: string; defaultBranch: string },
+  ): Promise<SandboxPushedBranch> {
+    assertDeliveryBranch(input.branch, input.defaultBranch);
+    if (!input.message.trim()) throw new SyntaxError("Commit message is required.");
+    if (!REPOSITORY_FULL_NAME_PATTERN.test(input.fullName)) {
+      throw new SyntaxError("Repository names must use the owner/name format.");
+    }
+    const sandbox = await getSandbox(name, true);
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          'set -euo pipefail',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
+          'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
+          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
+          'test -d "$repo/.git"',
+          '[ "$full_name" = "$3" ] || exit 18',
+          '[ "$repo" = "$4" ] || exit 18',
           'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
           'git -C "$repo" checkout -B "$1"',
           'git -C "$repo" add -A',
+          'if git -C "$repo" diff --cached --name-only | grep -E \'(^|/)\\.env($|\\.)|(^|/)id_(rsa|ed25519|ecdsa)($|\\.)|\\.pem$|(^|/)credentials\\.json$|(^|/)\\.git-credentials$\' >/dev/null; then exit 20; fi',
           'if git -C "$repo" diff --cached --quiet; then exit 19; fi',
           'git -C "$repo" commit -m "$2"',
           'git -C "$repo" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin "HEAD:$1"',
           'commit_sha="$(git -C "$repo" rev-parse HEAD)"',
-          'printf "%s\n%s\n%s\n%s\n" "$full_name" "$1" "$base_branch" "$commit_sha"',
+          'printf "%s\n%s\n%s\n%s\n" "$3" "$1" "$5" "$commit_sha"',
         ].join("\n"),
         "commit-and-push",
         input.branch,
         input.message,
+        input.fullName,
+        repositoryDirectory(input.fullName),
+        input.defaultBranch,
       ],
       cwd: sandboxConfig.cwd,
       env: { GITHUB_TOKEN: accessToken },
@@ -444,7 +501,10 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     });
     if (result.exitCode === 18) throw new RepositoryWorkspaceError();
     if (result.exitCode === 19) throw new NoRepositoryChangesError();
-    return parsePushedBranch(await commandStdoutOrThrow(result, "Failed to push repository changes."));
+    if (result.exitCode === 20) throw new SensitiveWorkspaceFilesError();
+    const pushed = parsePushedBranch(await commandStdoutOrThrow(result, "Failed to push repository changes."));
+    if (pushed.fullName !== input.fullName) throw new RepositoryWorkspaceError("Pushed repository did not match GitHub access.");
+    return { ...pushed, baseBranch: input.defaultBranch };
   }
 
   async openTerminal(
@@ -515,7 +575,13 @@ export class VercelSandboxRuntime implements SandboxRuntime {
 
   async extend(name: string, durationMs: number) {
     const sandbox = await getSandbox(name);
-    await sandbox.extendTimeout(durationMs);
+    if (sandbox.status !== "running") return toStatus(sandbox);
+    const startedAt = sandbox.createdAt?.getTime() ?? Date.now();
+    const expiresAt = sandbox.expiresAt?.getTime() ?? Date.now() + sandboxConfig.timeoutMs;
+    const cap = startedAt + sandboxConfig.maxLifetimeMs;
+    const extendBy = Math.min(durationMs, cap - expiresAt);
+    if (extendBy < 60_000) return toStatus(sandbox);
+    await sandbox.extendTimeout(extendBy);
     return toStatus(await Sandbox.get({ name, resume: false }));
   }
 
