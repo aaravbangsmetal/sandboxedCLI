@@ -1,5 +1,5 @@
 import { requireGitHubSession } from "@/lib/auth/require-session";
-import { listGitHubRepositories } from "@/lib/github/client";
+import { fetchGitHubRepository } from "@/lib/github/client";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
@@ -24,12 +24,7 @@ export async function POST(request: Request) {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
     const body = parseCloneRequest(await request.json());
-    const repository = (await listGitHubRepositories(session.accessToken)).find(
-      (candidate) => candidate.fullName === body.fullName,
-    );
-    if (!repository) {
-      return sandboxJson({ error: "Repository was not found for this GitHub user.", code: "repo_not_found" }, { status: 404 });
-    }
+    const repository = await fetchGitHubRepository(session.accessToken, body.fullName);
     if (!repository.permissions.pull) {
       return sandboxJson({ error: "Repository cannot be cloned with the current GitHub access.", code: "repo_forbidden" }, { status: 403 });
     }

@@ -182,6 +182,26 @@ function normalizeRepository(repo: GitHubRepoResponse): GitHubRepository {
   };
 }
 
+const REPOSITORY_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+export function parseRepositoryFullName(fullName: string) {
+  if (!REPOSITORY_FULL_NAME_PATTERN.test(fullName)) {
+    throw new SyntaxError("Repository names must use the owner/name format.");
+  }
+  const [owner, repo] = fullName.split("/");
+  return { owner, repo };
+}
+
+export async function fetchGitHubRepository(accessToken: string, fullName: string) {
+  const { owner, repo } = parseRepositoryFullName(fullName);
+  return normalizeRepository(
+    await githubJson<GitHubRepoResponse>(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { headers: githubHeaders(accessToken) },
+    ),
+  );
+}
+
 export async function listGitHubRepositories(accessToken: string) {
   const repositories: GitHubRepository[] = [];
   for (let page = 1; page <= 10; page += 1) {

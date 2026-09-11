@@ -5,7 +5,7 @@ const auth = vi.hoisted(() => ({
 }));
 
 const github = vi.hoisted(() => ({
-  listGitHubRepositories: vi.fn(),
+  fetchGitHubRepository: vi.fn(),
 }));
 
 const identity = vi.hoisted(() => ({
@@ -27,7 +27,10 @@ vi.mock("@/lib/auth/require-session", () => ({
   AuthenticationRequiredError: class AuthenticationRequiredError extends Error {},
   requireGitHubSession: auth.requireGitHubSession,
 }));
-vi.mock("@/lib/github/client", () => github);
+vi.mock("@/lib/github/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/github/client")>();
+  return { ...actual, fetchGitHubRepository: github.fetchGitHubRepository };
+});
 vi.mock("@/lib/sandbox/identity", () => identity);
 vi.mock("@/lib/sandbox/mutation-lock", () => lock);
 vi.mock("@/lib/sandbox/runtime", () => ({
@@ -67,7 +70,7 @@ describe("POST /api/github/repos/clone", () => {
       accessToken: "gho_token",
       user: { login: "octocat", email: "octocat@example.com" },
     });
-    github.listGitHubRepositories.mockResolvedValue([repo]);
+    github.fetchGitHubRepository.mockResolvedValue(repo);
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-test" });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
       work(),
@@ -101,11 +104,14 @@ describe("POST /api/github/repos/clone", () => {
     );
   });
 
-  it("rejects repositories outside the authenticated repo list", async () => {
+  it("rejects repositories the GitHub token cannot read", async () => {
+    const { GitHubApiError } = await import("@/lib/github/client");
+    github.fetchGitHubRepository.mockRejectedValue(new GitHubApiError("Not Found", 404));
+
     const response = await POST(cloneRequest({ fullName: "octocat/private" }));
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({ code: "repo_not_found" });
+    await expect(response.json()).resolves.toMatchObject({ code: "github_not_found" });
     expect(runtime.sandboxRuntime.cloneRepository).not.toHaveBeenCalled();
   });
 });
