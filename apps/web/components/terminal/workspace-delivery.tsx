@@ -51,6 +51,11 @@ export function WorkspaceDelivery() {
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const dirty = useMemo(() => hasChanges(status), [status]);
   const reviewed = status !== null || diff !== null;
+  const reviewSummary = !reviewed
+    ? "review the active repository before delivery"
+    : dirty
+      ? "changes detected · ready to prepare a pull request"
+      : "workspace clean · no pull request needed";
 
   const refresh = useCallback(async () => {
     setBusy("refresh");
@@ -103,6 +108,7 @@ export function WorkspaceDelivery() {
       {reviewed ? (
         <>
           <div className={styles.deliveryBody}>
+            <p className={styles.reviewSummary}>{reviewSummary}</p>
             <pre aria-label="Git status">{status?.output || "clone a repository, edit files, then review changes"}</pre>
             {diff?.output ? <pre aria-label="Git diff preview">{diff.output}</pre> : null}
             <label>
