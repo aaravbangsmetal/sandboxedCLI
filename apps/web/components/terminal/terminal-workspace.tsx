@@ -117,6 +117,24 @@ export function TerminalWorkspace() {
     );
   }, [createTransport]);
 
+  const retryTerminal = useCallback(
+    (id: string) => {
+      setConnectionStates((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      setTabs((current) =>
+        current.map((tab) => {
+          if (tab.id !== id) return tab;
+          tab.transport.dispose();
+          return { ...tab, transport: createTransport(tab.id) };
+        }),
+      );
+    },
+    [createTransport],
+  );
+
   const pauseTransports = useCallback(() => {
     tabs.forEach((tab) => tab.transport.dispose());
   }, [tabs]);
@@ -297,6 +315,11 @@ export function TerminalWorkspace() {
             <p className={styles.connectionStatus} role="status" aria-live="polite">
               terminal {connectionStates[tab.id] ?? "connecting"}
             </p>
+            {connectionStates[tab.id] === "error" || connectionStates[tab.id] === "disconnected" ? (
+              <button className={styles.retryTerminal} type="button" onClick={() => retryTerminal(tab.id)}>
+                &gt;_reconnect
+              </button>
+            ) : null}
             <XtermPane transport={tab.transport} label={`${tab.title} interactive cloud terminal`} />
           </div>
         ))}
