@@ -29,6 +29,7 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
   const [status, setStatus] = useState<SandboxStatus | null>(null);
   const [configured, setConfigured] = useState(true);
   const [busy, setBusy] = useState<"pause" | "resume" | "extend" | "destroy" | null>(null);
+  const [failedAction, setFailedAction] = useState<"pause" | "resume" | "extend" | "destroy" | null>(null);
   const [message, setMessage] = useState("checking workspace");
   const isRunning = status?.state === "running";
 
@@ -71,6 +72,7 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
     async (action: "pause" | "resume" | "extend" | "destroy") => {
       if (action === "destroy" && !window.confirm("Permanently delete this sandbox and its snapshots?")) return;
       setBusy(action);
+      setFailedAction(null);
       setMessage(`${action === "resume" ? "starting" : action === "destroy" ? "deleting" : action === "pause" ? "pausing" : "extending"} workspace`);
 
       try {
@@ -103,6 +105,7 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
                 : body?.sandbox?.state ?? "workspace state updated",
         );
       } catch (error) {
+        setFailedAction(action);
         setMessage(error instanceof Error ? error.message : "request failed");
       } finally {
         setBusy(null);
@@ -125,6 +128,11 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
       )}
       <button type="button" disabled={!isRunning || busy !== null} onClick={() => void mutate("extend")}>&gt;_extend</button>
       <button type="button" disabled={!status || status.state === "absent" || busy !== null} onClick={() => void mutate("destroy")}>&gt;_destroy</button>
+      {failedAction ? (
+        <button type="button" disabled={busy !== null} onClick={() => void mutate(failedAction)}>
+          &gt;_retry {failedAction}
+        </button>
+      ) : null}
     </div>
   );
 }
