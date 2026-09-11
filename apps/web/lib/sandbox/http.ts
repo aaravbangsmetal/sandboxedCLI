@@ -3,6 +3,7 @@ import "server-only";
 import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
+import { GitHubApiError } from "@/lib/github/client";
 import {
   AuthenticationRequiredError,
 } from "@/lib/auth/require-session";
@@ -43,6 +44,25 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof NoRepositoryChangesError) {
     return sandboxJson({ error: error.message, code: "no_repository_changes" }, { status: 409 });
+  }
+  if (error instanceof GitHubApiError) {
+    if (error.status === 401) {
+      return sandboxJson(
+        { error: "GitHub access expired. Sign in again.", code: "authentication_required" },
+        { status: 401 },
+      );
+    }
+    if (error.status === 403) {
+      return sandboxJson({ error: error.message, code: "github_forbidden" }, { status: 403 });
+    }
+    if (error.status === 404) {
+      return sandboxJson({ error: error.message, code: "github_not_found" }, { status: 404 });
+    }
+    if (error.status === 429) {
+      return sandboxJson({ error: "GitHub rate limit exceeded. Try again shortly.", code: "github_rate_limited" }, { status: 429 });
+    }
+    const status = error.status >= 400 && error.status < 500 ? error.status : 502;
+    return sandboxJson({ error: error.message, code: "github_error" }, { status });
   }
   if (error instanceof APIError) {
     const status = error.response.status >= 400 && error.response.status < 500 ? 409 : 502;
