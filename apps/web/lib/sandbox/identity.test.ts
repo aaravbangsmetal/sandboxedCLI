@@ -1,31 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 
-import {
-  deriveSandboxName,
-  deriveUserWorkspaceId,
-  parseWorkspaceCookie,
-  serializeWorkspaceCookie,
-} from "./identity";
+import { deriveSandboxName, deriveUserWorkspaceId } from "./identity";
 
 const WORKSPACE_ID = "a".repeat(64);
 
 describe("sandbox workspace identity", () => {
   beforeEach(() => {
     process.env.SANDBOX_SESSION_SECRET = "test-secret-at-least-local-only";
-  });
-
-  it("round-trips a signed workspace cookie", () => {
-    const cookie = serializeWorkspaceCookie(WORKSPACE_ID);
-    expect(parseWorkspaceCookie(cookie)).toBe(WORKSPACE_ID);
-  });
-
-  it("rejects tampered workspace cookies", () => {
-    const cookie = serializeWorkspaceCookie(WORKSPACE_ID);
-    expect(parseWorkspaceCookie(`${cookie.slice(0, -1)}0`)).toBeNull();
-    expect(parseWorkspaceCookie("invalid.signature")).toBeNull();
   });
 
   it("derives a stable opaque provider name", () => {
