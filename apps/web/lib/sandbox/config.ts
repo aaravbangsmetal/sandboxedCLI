@@ -26,6 +26,12 @@ export const sandboxConfig = {
     MINUTE,
     30 * MINUTE,
   ),
+  maxLifetimeMs: boundedInteger(
+    process.env.SANDBOX_MAX_LIFETIME_MS,
+    4 * 60 * MINUTE,
+    15 * MINUTE,
+    DAY,
+  ),
   cwd: "/vercel/sandbox",
   stateDirectory: "/vercel/sandbox/.sandboxedcli",
 } as const;

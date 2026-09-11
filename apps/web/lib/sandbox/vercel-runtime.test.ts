@@ -360,4 +360,14 @@ describe("VercelSandboxRuntime", () => {
     await runtime.destroy("sandboxed-cli-test");
     expect(stopped.delete).toHaveBeenCalledWith({ deleteOrphanSnapshots: true });
   });
+
+  it("does not extend a stopped sandbox", async () => {
+    const stopped = fakeSandbox("stopped");
+    sdk.get.mockResolvedValueOnce(stopped);
+
+    await expect(new VercelSandboxRuntime().extend("sandboxed-cli-test", 300_000)).resolves.toMatchObject({
+      state: "stopped",
+    });
+    expect(stopped.extendTimeout).not.toHaveBeenCalled();
+  });
 });
