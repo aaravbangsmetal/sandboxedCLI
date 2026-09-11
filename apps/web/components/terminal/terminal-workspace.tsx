@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 
 import { MockTerminalTransport } from "@/lib/terminal/mock-transport";
 import type { TerminalTransport } from "@/lib/terminal/transport";
-import { VercelTerminalTransport } from "@/lib/terminal/vercel-transport";
+import {
+  type TerminalConnectionState,
+  VercelTerminalTransport,
+} from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
 import { RepositoryPicker } from "./repository-picker";
@@ -85,11 +88,16 @@ export function TerminalWorkspace() {
       router.replace("/");
     }
   }, [router]);
+  const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
   const createTransport = useCallback(
     (id: string): TerminalTransport =>
       process.env.NEXT_PUBLIC_SANDBOX_TRANSPORT === "mock"
         ? new MockTerminalTransport({ onLogout: logout })
-        : new VercelTerminalTransport(id),
+        : new VercelTerminalTransport(id, {
+            onStateChange: (state) => {
+              setConnectionStates((current) => ({ ...current, [id]: state }));
+            },
+          }),
     [logout],
   );
   const materialize = useCallback(
@@ -286,6 +294,9 @@ export function TerminalWorkspace() {
             aria-labelledby={`terminal-tab-${tab.id}`}
             hidden={tab.id !== activeTab.id}
           >
+            <p className={styles.connectionStatus} role="status" aria-live="polite">
+              terminal {connectionStates[tab.id] ?? "connecting"}
+            </p>
             <XtermPane transport={tab.transport} label={`${tab.title} interactive cloud terminal`} />
           </div>
         ))}
