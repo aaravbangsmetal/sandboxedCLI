@@ -18,6 +18,7 @@ import type {
 } from "./contracts";
 import { hasVercelSandboxCredentials, sandboxConfig } from "./config";
 import {
+  DirtyRepositoryError,
   NoRepositoryChangesError,
   ProtectedBranchError,
   RepositoryWorkspaceError,
@@ -180,6 +181,7 @@ async function ensureWorkspaceFiles(sandbox: Sandbox) {
     "-p",
     sandboxConfig.stateDirectory,
     `${sandboxConfig.stateDirectory}/bin`,
+    `${sandboxConfig.stateDirectory}/history`,
   ]);
   if (directory.exitCode !== 0) throw new Error(await directory.stderr());
   await sandbox.writeFiles([
@@ -334,9 +336,9 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           '  git -C "$3" remote set-url origin "$2"',
           '  git -C "$3" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" fetch origin "$1"',
           '  if git -C "$3" show-ref --verify --quiet "refs/heads/$1"; then',
-          '    git -C "$3" checkout "$1"',
+          '    git -C "$3" checkout "$1" || exit 21',
           '  else',
-          '    git -C "$3" checkout --track -b "$1" "origin/$1"',
+          '    git -C "$3" checkout --track -b "$1" "origin/$1" || exit 21',
           '  fi',
           '  already_present=1',
           'else',
@@ -367,6 +369,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     if (result.exitCode === 17) {
       return { fullName: repository.fullName, branch, directory, alreadyPresent: true };
     }
+    if (result.exitCode === 21) throw new DirtyRepositoryError();
     if (result.exitCode !== 0) {
       const stderr = await result.stderr();
       throw new Error(stderr || "Repository clone failed.");
@@ -392,6 +395,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
       cwd: sandboxConfig.cwd,
       timeoutMs: 30_000,
     });
+    if (result.exitCode === 18) throw new RepositoryWorkspaceError();
     return splitRepositoryCommandOutput(await commandStdoutOrThrow(result, "Git status failed."));
   }
 
@@ -407,13 +411,16 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
           'test -d "$repo/.git"',
           'printf "%s\n" "$repo"',
-          'git -C "$repo" diff --stat',
-          'git -C "$repo" diff --no-ext-diff --color=never | head -c 120000',
+          'git -C "$repo" diff --stat HEAD',
+          'git -C "$repo" diff --no-ext-diff --color=never HEAD | head -c 120000',
+          'untracked="$(git -C "$repo" ls-files --others --exclude-standard)"',
+          'if [ -n "$untracked" ]; then printf "\\n-- untracked --\\n%s\\n" "$untracked"; fi',
         ].join("\n"),
       ],
       cwd: sandboxConfig.cwd,
       timeoutMs: 30_000,
     });
+    if (result.exitCode === 18) throw new RepositoryWorkspaceError();
     const output = await commandStdoutOrThrow(result, "Git diff failed.");
     const parsed = splitRepositoryCommandOutput(output);
     return {
@@ -481,7 +488,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
           'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
           'git -C "$repo" checkout -B "$1"',
           'git -C "$repo" add -A',
-          'if git -C "$repo" diff --cached --name-only | grep -E \'(^|/)\\.env($|\\.)|(^|/)id_(rsa|ed25519|ecdsa)($|\\.)|\\.pem$|(^|/)credentials\\.json$|(^|/)\\.git-credentials$\' >/dev/null; then exit 20; fi',
+          'if git -C "$repo" diff --cached --name-only | grep -E \'(^|/)\\.env($|\\.)|(^|/)id_(rsa|ed25519|ecdsa)($|\\.)|\\.pem$|(^|/)credentials\\.json$|(^|/)\\.git-credentials$\' >/dev/null; then git -C "$repo" reset >/dev/null; exit 20; fi',
           'if git -C "$repo" diff --cached --quiet; then exit 19; fi',
           'git -C "$repo" commit -m "$2"',
           'git -C "$repo" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin "HEAD:$1"',
