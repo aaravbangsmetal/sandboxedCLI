@@ -3,6 +3,7 @@ import { fetchGitHubRepository } from "@/lib/github/client";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
+import { assertRateLimit } from "@/lib/sandbox/rate-limit";
 import { assertSafeMutationRequest } from "@/lib/sandbox/request-security";
 import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
+    assertRateLimit(`${session.account.id}:clone`, 8, 10 * 60_000);
     const body = parseCloneRequest(await request.json());
     const repository = await fetchGitHubRepository(session.accessToken, body.fullName);
     if (!repository.permissions.pull) {

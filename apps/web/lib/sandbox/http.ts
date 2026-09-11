@@ -12,11 +12,13 @@ import {
   InvalidTerminalIdError,
   NoRepositoryChangesError,
   ProtectedBranchError,
+  PullRequestCreateError,
   RepositoryWorkspaceError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
   SensitiveWorkspaceFilesError,
 } from "./errors";
+import { RateLimitError } from "./rate-limit";
 import { UnsafeSandboxRequestError } from "./request-security";
 
 export function sandboxJson(body: unknown, init: ResponseInit = {}) {
@@ -26,6 +28,9 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
 }
 
 export function sandboxErrorResponse(error: unknown) {
+  if (error instanceof RateLimitError) {
+    return sandboxJson({ error: error.message, code: "rate_limited" }, { status: 429 });
+  }
   if (error instanceof AuthenticationRequiredError) {
     return sandboxJson({ error: error.message, code: "authentication_required" }, { status: 401 });
   }
@@ -49,6 +54,12 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof ProtectedBranchError || error instanceof SensitiveWorkspaceFilesError) {
     return sandboxJson({ error: error.message, code: "unsafe_delivery" }, { status: 400 });
+  }
+  if (error instanceof PullRequestCreateError) {
+    return sandboxJson(
+      { error: error.message, code: "pull_request_create_failed", pushed: error.pushed },
+      { status: 502 },
+    );
   }
   if (error instanceof GitHubApiError) {
     if (error.status === 401) {

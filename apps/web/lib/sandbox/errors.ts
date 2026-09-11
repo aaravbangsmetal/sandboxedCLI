@@ -48,3 +48,14 @@ export class SensitiveWorkspaceFilesError extends Error {
     this.name = "SensitiveWorkspaceFilesError";
   }
 }
+
+export class PullRequestCreateError extends Error {
+  constructor(
+    readonly pushed: { fullName: string; branch: string; baseBranch: string; commitSha: string },
+    cause?: unknown,
+  ) {
+    super(`Branch ${pushed.branch} was pushed, but GitHub did not open a pull request.`);
+    this.name = "PullRequestCreateError";
+    if (cause instanceof Error) this.cause = cause;
+  }
+}

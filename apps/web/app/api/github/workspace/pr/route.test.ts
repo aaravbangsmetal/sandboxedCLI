@@ -56,7 +56,10 @@ function prRequest(body: unknown) {
 describe("POST /api/github/workspace/pr", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    auth.requireGitHubSession.mockResolvedValue({ accessToken: "gho_token" });
+    auth.requireGitHubSession.mockResolvedValue({
+      accessToken: "gho_token",
+      account: { id: "supabase-user-id" },
+    });
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-test" });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
       work(),
@@ -118,5 +121,21 @@ describe("POST /api/github/workspace/pr", () => {
         base: "main",
       }),
     );
+  });
+
+  it("returns the pushed branch when GitHub cannot open the pull request", async () => {
+    github.createGitHubPullRequest.mockRejectedValue(new Error("Validation Failed"));
+    const response = await POST(
+      prRequest({
+        title: "Apply sandbox changes",
+        branch: "sandboxedcli/test-change",
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "pull_request_create_failed",
+      pushed: { branch: "sandboxedcli/test-change", commitSha: "0123456789abcdef0123456789abcdef01234567" },
+    });
   });
 });

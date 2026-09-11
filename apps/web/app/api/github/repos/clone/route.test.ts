@@ -69,6 +69,7 @@ describe("POST /api/github/repos/clone", () => {
     auth.requireGitHubSession.mockResolvedValue({
       accessToken: "gho_token",
       user: { login: "octocat", email: "octocat@example.com" },
+      account: { id: "supabase-user-id" },
     });
     github.fetchGitHubRepository.mockResolvedValue(repo);
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-test" });

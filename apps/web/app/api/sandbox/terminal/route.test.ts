@@ -38,7 +38,10 @@ function request(method: "POST" | "DELETE", body: unknown) {
 describe("/api/sandbox/terminal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    auth.requireGitHubSession.mockResolvedValue({ accessToken: "gho_token" });
+    auth.requireGitHubSession.mockResolvedValue({
+      accessToken: "gho_token",
+      account: { id: "supabase-user-id" },
+    });
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
     identity.getWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
