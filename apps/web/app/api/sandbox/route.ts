@@ -1,4 +1,4 @@
-import { clearWorkspaceIdentity, getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
+import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
 import { assertSafeMutationRequest } from "@/lib/sandbox/request-security";
@@ -56,7 +56,6 @@ export async function DELETE(request: Request) {
     await withSandboxMutationLock(identity.sandboxName, () =>
       getSandboxRuntime().destroy(identity.sandboxName),
     );
-    await clearWorkspaceIdentity();
     return sandboxJson({ destroyed: true });
   } catch (error) {
     return sandboxErrorResponse(error);

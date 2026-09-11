@@ -44,7 +44,3 @@ export async function getWorkspaceIdentity() {
 export async function getOrCreateWorkspaceIdentity() {
   return getWorkspaceIdentity();
 }
-
-export async function clearWorkspaceIdentity() {
-  return;
-}
