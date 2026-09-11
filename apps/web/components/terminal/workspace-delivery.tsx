@@ -96,7 +96,15 @@ export function WorkspaceDelivery() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title, body, branch: branch.trim() || undefined }),
       });
-      const payload = await readJson<PullRequestResponse>(response);
+      const payload = (await response.json().catch(() => null)) as PullRequestResponse | null;
+      if (payload?.pushed && !payload.pullRequest) {
+        setMessage(
+          `${payload.error || "Pull request was not opened."} Branch ${payload.pushed.branch} is on GitHub.`,
+        );
+        setFailedAction("deliver");
+        return;
+      }
+      if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status}).`);
       if (!payload?.pullRequest) throw new Error("Pull request was not returned.");
       setPullRequestUrl(payload.pullRequest.htmlUrl);
       setMessage(`pull request #${payload.pullRequest.number} opened from ${payload.pullRequest.head}`);
