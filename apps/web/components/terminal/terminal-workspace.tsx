@@ -70,6 +70,7 @@ export function TerminalWorkspace() {
   const logout = useCallback(async () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem("sandboxedcli.active-repository.v1");
       await Promise.allSettled([
         fetch("/api/sandbox/pause", {
           method: "POST",

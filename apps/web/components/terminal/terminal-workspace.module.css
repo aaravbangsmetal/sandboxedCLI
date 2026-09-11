@@ -31,6 +31,11 @@
   white-space: nowrap;
 }
 
+.repoContext {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
 .repoBar a,
 .repoBar button,
 .repoBar select {
@@ -415,6 +420,10 @@
   }
 
   .repoStatus {
+    flex: 1 0 100%;
+  }
+
+  .repoContext {
     flex: 1 0 100%;
   }
 

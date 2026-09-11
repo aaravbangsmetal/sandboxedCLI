@@ -39,10 +39,13 @@ interface RepositoryPickerProps {
   onRepositoryReady: (directory: string) => void;
 }
 
+const ACTIVE_REPOSITORY_KEY = "sandboxedcli.active-repository.v1";
+
 export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selected, setSelected] = useState("");
+  const [activeRepository, setActiveRepository] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("checking github");
@@ -96,6 +99,10 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
     };
   }, [loadRepositories]);
 
+  useEffect(() => {
+    setActiveRepository(sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "");
+  }, []);
+
   const cloneRepository = useCallback(async () => {
     if (!selectedRepo) return;
     setBusy(true);
@@ -114,6 +121,8 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
           ? `${body.clone.fullName} already at ${body.clone.directory}`
           : `${body.clone.fullName} ready at ${body.clone.directory}`,
       );
+      setActiveRepository(body.clone.fullName);
+      sessionStorage.setItem(ACTIVE_REPOSITORY_KEY, body.clone.fullName);
       onRepositoryReady(body.clone.directory);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "clone failed");
@@ -134,6 +143,7 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       <span className={styles.repoStatus} role="status" aria-live="polite">
         {message}
       </span>
+      {activeRepository ? <span className={styles.repoContext}>active: {activeRepository}</span> : null}
       {authenticated === false ? (
         <a href="/api/auth/github">&gt;_login github</a>
       ) : (
