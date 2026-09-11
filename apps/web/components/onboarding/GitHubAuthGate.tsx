@@ -41,13 +41,23 @@ export function GitHubAuthGate() {
 
   useEffect(() => {
     let active = true;
+    const oauthError = new URLSearchParams(window.location.search).get("error");
     void fetch("/api/auth/session", { cache: "no-store" })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as SessionResponse | null;
         if (!response.ok) throw new Error(body?.error || "GitHub session check failed.");
         if (!active) return;
         setLogin(body?.user?.login ?? "");
-        setState(body?.authenticated ? "authenticated" : "unauthenticated");
+        if (body?.authenticated) {
+          setState("authenticated");
+          return;
+        }
+        if (oauthError) {
+          setError(oauthError.replaceAll("_", " "));
+          setState("error");
+          return;
+        }
+        setState("unauthenticated");
       })
       .catch((reason) => {
         if (!active) return;

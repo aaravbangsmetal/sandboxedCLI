@@ -3,6 +3,7 @@ import "server-only";
 import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
+import { dropGitHubConnectionIfPresent } from "@/lib/auth/session";
 import { GitHubApiError } from "@/lib/github/client";
 import {
   AuthenticationRequiredError,
@@ -11,6 +12,7 @@ import {
 import {
   InvalidTerminalIdError,
   NoRepositoryChangesError,
+  DirtyRepositoryError,
   ProtectedBranchError,
   PullRequestCreateError,
   RepositoryWorkspaceError,
@@ -27,7 +29,7 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
   return NextResponse.json(body, { ...init, headers });
 }
 
-export function sandboxErrorResponse(error: unknown) {
+export async function sandboxErrorResponse(error: unknown) {
   if (error instanceof RateLimitError) {
     return sandboxJson({ error: error.message, code: "rate_limited" }, { status: 429 });
   }
@@ -52,6 +54,9 @@ export function sandboxErrorResponse(error: unknown) {
   if (error instanceof NoRepositoryChangesError) {
     return sandboxJson({ error: error.message, code: "no_repository_changes" }, { status: 409 });
   }
+  if (error instanceof DirtyRepositoryError) {
+    return sandboxJson({ error: error.message, code: "dirty_repository" }, { status: 409 });
+  }
   if (error instanceof ProtectedBranchError || error instanceof SensitiveWorkspaceFilesError) {
     return sandboxJson({ error: error.message, code: "unsafe_delivery" }, { status: 400 });
   }
@@ -63,6 +68,7 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof GitHubApiError) {
     if (error.status === 401) {
+      await dropGitHubConnectionIfPresent().catch(() => undefined);
       return sandboxJson(
         { error: "GitHub access expired. Sign in again.", code: "authentication_required" },
         { status: 401 },

@@ -21,6 +21,13 @@ export class InvalidTerminalIdError extends Error {
   }
 }
 
+export class DirtyRepositoryError extends Error {
+  constructor() {
+    super("The cloned repository has local changes that block checkout. Commit, stash, or discard them in the terminal first.");
+    this.name = "DirtyRepositoryError";
+  }
+}
+
 export class NoRepositoryChangesError extends Error {
   constructor() {
     super("There are no repository changes to deliver.");

@@ -29,6 +29,12 @@ export async function getGitHubSession(): Promise<GitHubSession | null> {
   };
 }
 
+export async function dropGitHubConnectionIfPresent() {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getUser();
+  if (data.user) await deleteGitHubConnection(data.user.id);
+}
+
 export async function clearGitHubSession() {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();

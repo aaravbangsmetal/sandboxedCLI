@@ -48,11 +48,9 @@ export async function DELETE(request: Request) {
     const terminalId = validateTerminalId(typeof body.terminalId === "string" ? body.terminalId : "");
     await requireGitHubSession();
     const identity = await getWorkspaceIdentity();
-    if (identity) {
-      await withSandboxMutationLock(identity.sandboxName, () =>
-        getSandboxRuntime().killTerminal(identity.sandboxName, terminalId),
-      );
-    }
+    await withSandboxMutationLock(identity.sandboxName, () =>
+      getSandboxRuntime().killTerminal(identity.sandboxName, terminalId),
+    );
     return sandboxJson({ terminated: true });
   } catch (error) {
     return sandboxErrorResponse(error);

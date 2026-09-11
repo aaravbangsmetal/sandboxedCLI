@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("./github-connection", () => connections);
 
-import { clearGitHubSession, getGitHubSession } from "./session";
+import { clearGitHubSession, dropGitHubConnectionIfPresent, getGitHubSession } from "./session";
 
 describe("Supabase-backed GitHub session", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -68,5 +68,16 @@ describe("Supabase-backed GitHub session", () => {
     await clearGitHubSession();
     expect(connections.deleteGitHubConnection).toHaveBeenCalledWith("supabase-user-id");
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("drops stored GitHub access without signing out", async () => {
+    auth.getUser.mockResolvedValue({
+      data: { user: { id: "supabase-user-id" } },
+      error: null,
+    });
+    connections.deleteGitHubConnection.mockResolvedValue(undefined);
+    await dropGitHubConnectionIfPresent();
+    expect(connections.deleteGitHubConnection).toHaveBeenCalledWith("supabase-user-id");
+    expect(auth.signOut).not.toHaveBeenCalled();
   });
 });

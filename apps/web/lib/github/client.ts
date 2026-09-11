@@ -229,8 +229,9 @@ export async function createGitHubPullRequest(
   fullName: string,
   input: { title: string; body: string; head: string; base: string },
 ): Promise<GitHubPullRequest> {
+  const { owner, repo } = parseRepositoryFullName(fullName);
   const pullRequest = await githubJson<GitHubPullRequestResponse>(
-    `https://api.github.com/repos/${encodeURIComponent(fullName).replace("%2F", "/")}/pulls`,
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
     {
       method: "POST",
       headers: { ...githubHeaders(accessToken), "content-type": "application/json" },

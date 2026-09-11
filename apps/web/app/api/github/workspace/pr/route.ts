@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function slugSuffix() {
-  return Math.random().toString(36).slice(2, 10);
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 8);
 }
 
 function parsePullRequestRequest(body: unknown) {
@@ -35,8 +35,8 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
-    assertRateLimit(`${session.account.id}:pr`, 8, 10 * 60_000);
     const input = parsePullRequestRequest(await request.json());
+    assertRateLimit(`${session.account.id}:pr`, 8, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
     const sandboxRuntime = getSandboxRuntime();
     const pushed = await withSandboxMutationLock(identity.sandboxName, async () => {

@@ -249,7 +249,19 @@ export function TerminalWorkspace() {
       if (id === activeId) {
         const replacement = remaining[Math.min(closingIndex, remaining.length - 1)];
         setActiveId(replacement.id);
+        setActivatedIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          next.add(replacement.id);
+          return next;
+        });
+        return;
       }
+      setActivatedIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
     },
     [activeId, materialize, tabs, terminateRemoteTab],
   );

@@ -211,6 +211,29 @@ describe("VercelSandboxRuntime", () => {
     expect(command.args.join(" ")).toContain("active_repo_path");
   });
 
+  it("fails clearly when an existing clone cannot be checked out", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 21,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.getOrCreate.mockResolvedValue(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().cloneRepository(
+        "sandboxed-cli-test",
+        {
+          fullName: "octocat/hello-world",
+          cloneUrl: "https://github.com/octocat/hello-world.git",
+          defaultBranch: "main",
+        },
+        "gho_token",
+        { login: "octocat", email: "octocat@example.com" },
+      ),
+    ).rejects.toThrow("local changes that block checkout");
+  });
+
   it("rejects unsafe branch names before running sandbox commands", async () => {
     const sandbox = fakeSandbox();
     sdk.getOrCreate.mockResolvedValue(sandbox);
@@ -246,6 +269,20 @@ describe("VercelSandboxRuntime", () => {
     });
   });
 
+  it("maps a missing active repository to a workspace error", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 18,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(new VercelSandboxRuntime().gitStatus("sandboxed-cli-test")).rejects.toThrow(
+      "No active repository is ready in this sandbox.",
+    );
+  });
+
   it("reads a bounded git diff from the active sandbox repository", async () => {
     const sandbox = fakeSandbox();
     sandbox.runCommand.mockResolvedValueOnce({
@@ -260,6 +297,8 @@ describe("VercelSandboxRuntime", () => {
       output: " README.md | 1 +\n+hello\n",
       truncated: false,
     });
+    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
+    expect(command.args.join(" ")).toContain("diff --stat HEAD");
   });
 
   it("commits and pushes active repository changes to a sandbox branch", async () => {
