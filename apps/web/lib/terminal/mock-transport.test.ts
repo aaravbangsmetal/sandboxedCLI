@@ -21,6 +21,16 @@ describe("MockTerminalTransport", () => {
     expect(output).toContain(expected);
   });
 
+  it("changes the working directory for later pwd commands", () => {
+    let output = "";
+    const transport = new MockTerminalTransport();
+    transport.connect((data) => (output += data));
+    transport.write("cd '/vercel/sandbox/repos/octocat__hello-world'\r");
+    output = "";
+    transport.write("pwd\r");
+    expect(output).toContain("/vercel/sandbox/repos/octocat__hello-world");
+  });
+
   it("returns a restrained pending response for unknown commands", () => {
     let output = "";
     const transport = new MockTerminalTransport();
