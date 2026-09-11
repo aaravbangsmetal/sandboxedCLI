@@ -122,6 +122,13 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
     }
   }, [onRepositoryReady, selectedRepo]);
 
+  const refreshRepositories = useCallback(() => {
+    void loadRepositories().catch((error) => {
+      setAuthenticated(false);
+      setMessage(error instanceof Error ? error.message : "github unavailable");
+    });
+  }, [loadRepositories]);
+
   return (
     <div className={styles.repoBar} aria-busy={loading || busy} aria-label="GitHub repository controls">
       <span className={styles.repoStatus} role="status" aria-live="polite">
@@ -143,6 +150,9 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
               </option>
             ))}
           </select>
+          <button type="button" disabled={loading || busy} onClick={refreshRepositories}>
+            &gt;_refresh
+          </button>
           <button type="button" disabled={loading || busy || !selectedRepo} onClick={() => void cloneRepository()}>
             &gt;_clone
           </button>
