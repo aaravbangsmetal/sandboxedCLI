@@ -5,6 +5,9 @@ const identity = vi.hoisted(() => ({
   getOrCreateWorkspaceIdentity: vi.fn(),
   getWorkspaceIdentity: vi.fn(),
 }));
+const lock = vi.hoisted(() => ({
+  withSandboxMutationLock: vi.fn(),
+}));
 const runtime = vi.hoisted(() => ({
   sandboxRuntime: { openTerminal: vi.fn(), killTerminal: vi.fn() },
   getSandboxRuntime: vi.fn(),
@@ -15,6 +18,7 @@ vi.mock("@/lib/auth/require-session", () => ({
   requireGitHubSession: auth.requireGitHubSession,
 }));
 vi.mock("@/lib/sandbox/identity", () => identity);
+vi.mock("@/lib/sandbox/mutation-lock", () => lock);
 vi.mock("@/lib/sandbox/runtime", () => ({ getSandboxRuntime: runtime.getSandboxRuntime }));
 
 import { DELETE, POST } from "./route";
@@ -37,6 +41,9 @@ describe("/api/sandbox/terminal", () => {
     auth.requireGitHubSession.mockResolvedValue({ accessToken: "gho_token" });
     identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
     identity.getWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
+    lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
+      work(),
+    );
     runtime.getSandboxRuntime.mockReturnValue(runtime.sandboxRuntime);
     runtime.sandboxRuntime.openTerminal.mockResolvedValue({
       terminalId: "terminal-one",
@@ -54,6 +61,7 @@ describe("/api/sandbox/terminal", () => {
       { cols: 120, rows: 40 },
       "gho_token",
     );
+    expect(lock.withSandboxMutationLock).toHaveBeenCalledWith("sandboxed-cli-user", expect.any(Function));
     const body = await response.text();
     expect(body).not.toContain("gho_token");
   });
