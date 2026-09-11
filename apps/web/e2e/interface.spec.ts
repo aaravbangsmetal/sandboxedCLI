@@ -279,6 +279,169 @@ test("validates an optional delivery branch before opening a pull request", asyn
   await expect(deliver).toBeEnabled();
 });
 
+test("retries repository loading without forcing github login", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/github/repos", async (route) => {
+    if (!route.request().url().endsWith("/api/github/repos")) return route.continue();
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "github unavailable" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        repositories: [
+          {
+            id: 1,
+            name: "hello-world",
+            fullName: "octocat/hello-world",
+            private: false,
+            htmlUrl: "https://github.com/octocat/hello-world",
+            cloneUrl: "https://github.com/octocat/hello-world.git",
+            defaultBranch: "main",
+            pushedAt: null,
+            permissions: { admin: false, maintain: false, push: true, triage: false, pull: true },
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/terminal");
+  await expect(page.getByText("github unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: ">_login github" })).toHaveCount(0);
+  await page.getByRole("button", { name: ">_retry load" }).click();
+  await expect(page.getByText("1 repositories ready", { exact: true })).toBeVisible();
+});
+
+test("retries a failed repository clone", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/github/repos/clone", async (route) => {
+    if (!route.request().url().endsWith("/api/github/repos/clone")) return route.continue();
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "clone failed" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        clone: {
+          fullName: "octocat/hello-world",
+          branch: "main",
+          directory: "/vercel/sandbox/repos/octocat__hello-world",
+          alreadyPresent: false,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_clone" }).click();
+  await expect(page.getByText("clone failed", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: ">_retry clone" }).click();
+  await expect(page.getByText(/octocat\/hello-world ready at/)).toBeVisible();
+});
+
+test("lands a new terminal in a cloned repository", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.startsWith("mobile"), "xterm transcript assertion is desktop-only");
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_clone" }).click();
+  await expect(page.getByRole("tab", { name: "$_terminal 2" })).toHaveAttribute("aria-selected", "true");
+  const input = page.getByRole("tabpanel").locator(".xterm-helper-textarea");
+  await input.pressSequentially("pwd");
+  await input.press("Enter");
+  await expect(page.getByRole("tabpanel").locator(".xterm-accessibility-tree")).toContainText(
+    "/vercel/sandbox/repos/octocat__hello-world",
+  );
+});
+
+test("reuses the current terminal when a repository is already present", async ({ page }) => {
+  await page.route("**/api/github/repos/clone", async (route) => {
+    if (!route.request().url().endsWith("/api/github/repos/clone")) return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        clone: {
+          fullName: "octocat/hello-world",
+          branch: "main",
+          directory: "/vercel/sandbox/repos/octocat__hello-world",
+          alreadyPresent: true,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_clone" }).click();
+  await expect(page.getByText(/octocat\/hello-world already at/)).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("warns when the git diff preview is truncated", async ({ page }) => {
+  await page.route("**/api/github/workspace/diff", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        diff: {
+          repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world",
+          output: " README.md | 1 +\n+cloud terminal change\n",
+          truncated: true,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_review" }).click();
+  await expect(
+    page.getByText("diff truncated · review the remaining changes in the terminal", { exact: true }),
+  ).toBeVisible();
+});
+
+test("retries a failed sandbox pause", async ({ page }) => {
+  let attempts = 0;
+  await page.unroute("**/api/sandbox/pause");
+  await page.route("**/api/sandbox/pause", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "pause failed" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sandbox: {
+          name: "sandboxed-cli-e2e",
+          state: "stopped",
+          persistent: true,
+          filesystemPreserved: true,
+          processMemoryPreserved: false,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_pause" }).click();
+  await expect(page.getByRole("button", { name: ">_retry pause" })).toBeVisible();
+  await page.getByRole("button", { name: ">_retry pause" }).click();
+  await expect(page.getByText("stopped · files preserved · processes reset")).toBeVisible();
+});
+
 test("fits the mobile viewport and keeps the footer readable", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith("mobile"), "mobile-only layout assertion");
   await page.goto("/terminal");
