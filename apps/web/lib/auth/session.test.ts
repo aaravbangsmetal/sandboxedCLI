@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({ getUser: vi.fn(), signOut: vi.fn() }));
-const connections = vi.hoisted(() => ({ getGitHubConnection: vi.fn() }));
+const connections = vi.hoisted(() => ({ getGitHubConnection: vi.fn(), deleteGitHubConnection: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(async () => ({ auth })),
@@ -58,9 +58,15 @@ describe("Supabase-backed GitHub session", () => {
     await expect(getGitHubSession()).resolves.toBeNull();
   });
 
-  it("signs out only the current Supabase session", async () => {
+  it("clears stored GitHub access then signs out the current session", async () => {
+    auth.getUser.mockResolvedValue({
+      data: { user: { id: "supabase-user-id" } },
+      error: null,
+    });
+    connections.deleteGitHubConnection.mockResolvedValue(undefined);
     auth.signOut.mockResolvedValue({ error: null });
     await clearGitHubSession();
+    expect(connections.deleteGitHubConnection).toHaveBeenCalledWith("supabase-user-id");
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 });

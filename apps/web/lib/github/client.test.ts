@@ -18,13 +18,16 @@ describe("GitHub client", () => {
       vi.fn(async (url: string | URL | Request) => {
         const href = String(url);
         if (href.endsWith("/user")) {
-          return Response.json({
-            id: 1,
-            login: "octocat",
-            name: null,
-            avatar_url: "https://avatars.githubusercontent.com/u/1",
-            html_url: "https://github.com/octocat",
-          });
+          return new Response(
+            JSON.stringify({
+              id: 1,
+              login: "octocat",
+              name: null,
+              avatar_url: "https://avatars.githubusercontent.com/u/1",
+              html_url: "https://github.com/octocat",
+            }),
+            { headers: { "content-type": "application/json", "x-oauth-scopes": "read:user, repo" } },
+          );
         }
         if (href.endsWith("/user/emails")) {
           return Response.json([{ email: "octocat@example.com", primary: true, verified: true }]);
@@ -48,6 +51,7 @@ describe("GitHub client", () => {
     await expect(fetchGitHubViewer("gho_token")).resolves.toMatchObject({
       login: "octocat",
       email: "octocat@example.com",
+      grantedScope: "read:user repo",
     });
     await expect(listGitHubRepositories("gho_token")).resolves.toMatchObject([
       { fullName: "octocat/hello-world", permissions: { pull: true, push: true } },

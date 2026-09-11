@@ -2,7 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-import { getGitHubConnection, type GitHubConnection } from "./github-connection";
+import { deleteGitHubConnection, getGitHubConnection, type GitHubConnection } from "./github-connection";
 
 export interface GitHubSession extends GitHubConnection {
   account: {
@@ -31,6 +31,8 @@ export async function getGitHubSession(): Promise<GitHubSession | null> {
 
 export async function clearGitHubSession() {
   const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getUser();
+  if (data.user) await deleteGitHubConnection(data.user.id);
   const { error } = await supabase.auth.signOut({ scope: "local" });
   if (error) throw error;
 }

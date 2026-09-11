@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     const viewer = await fetchGitHubViewer(data.session.provider_token);
     await saveGitHubConnection(data.user.id, {
       accessToken: data.session.provider_token,
-      scope: githubAuthConfig.scope,
+      scope: viewer.grantedScope || githubAuthConfig.scope,
       tokenType: "bearer",
       user: {
         id: viewer.id,

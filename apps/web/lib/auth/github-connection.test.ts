@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => database,
 }));
 
-import { getGitHubConnection, saveGitHubConnection } from "./github-connection";
+import { deleteGitHubConnection, getGitHubConnection, saveGitHubConnection } from "./github-connection";
 
 const connection = {
   accessToken: "gho_secret-token",
@@ -82,5 +82,15 @@ describe("GitHub connection persistence", () => {
     database.from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
     await expect(getGitHubConnection("supabase-user-id")).resolves.toBeNull();
+  });
+
+  it("deletes a persisted GitHub connection", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const del = vi.fn().mockReturnValue({ eq });
+    database.from.mockReturnValue({ delete: del });
+
+    await deleteGitHubConnection("supabase-user-id");
+    expect(database.from).toHaveBeenCalledWith("github_connections");
+    expect(eq).toHaveBeenCalledWith("user_id", "supabase-user-id");
   });
 });
