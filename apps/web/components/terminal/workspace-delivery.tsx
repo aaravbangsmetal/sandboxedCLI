@@ -48,6 +48,7 @@ export function WorkspaceDelivery() {
   const [diff, setDiff] = useState<SandboxGitDiff | null>(null);
   const [message, setMessage] = useState("delivery idle");
   const [busy, setBusy] = useState<"refresh" | "deliver" | null>(null);
+  const [failedAction, setFailedAction] = useState<"refresh" | "deliver" | null>(null);
   const [title, setTitle] = useState("Apply sandbox changes");
   const [body, setBody] = useState("");
   const [branch, setBranch] = useState("");
@@ -63,6 +64,7 @@ export function WorkspaceDelivery() {
 
   const refresh = useCallback(async () => {
     setBusy("refresh");
+    setFailedAction(null);
     setPullRequestUrl(null);
     setMessage("reading git workspace");
     try {
@@ -77,6 +79,7 @@ export function WorkspaceDelivery() {
       setStatus(null);
       setDiff(null);
       setMessage(error instanceof Error ? error.message : "git workspace unavailable");
+      setFailedAction("refresh");
     } finally {
       setBusy(null);
     }
@@ -84,6 +87,7 @@ export function WorkspaceDelivery() {
 
   const deliver = useCallback(async () => {
     setBusy("deliver");
+    setFailedAction(null);
     setMessage("pushing branch and opening pull request");
     setPullRequestUrl(null);
     try {
@@ -98,6 +102,7 @@ export function WorkspaceDelivery() {
       setMessage(`pull request #${payload.pullRequest.number} opened from ${payload.pullRequest.head}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "delivery failed");
+      setFailedAction("deliver");
     } finally {
       setBusy(null);
     }
@@ -108,6 +113,11 @@ export function WorkspaceDelivery() {
       <div className={styles.deliveryHeader}>
         <span role="status" aria-live="polite">{message}</span>
         <button type="button" disabled={busy !== null} onClick={() => void refresh()}>&gt;_review</button>
+        {failedAction ? (
+          <button type="button" disabled={busy !== null} onClick={() => void (failedAction === "refresh" ? refresh() : deliver())}>
+            &gt;_retry {failedAction}
+          </button>
+        ) : null}
       </div>
       {reviewed ? (
         <>
