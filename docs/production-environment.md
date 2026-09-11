@@ -8,7 +8,7 @@
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...` | Supabase Dashboard → Project Settings → API, or the project Connect dialog |
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret service-role key | Supabase Dashboard → Project Settings → API → Legacy API Keys; server only |
 | `GITHUB_TOKEN_ENCRYPTION_KEY` | Random 32-byte-or-longer secret | Generate once with `openssl rand -base64 32` |
-| `SANDBOX_SESSION_SECRET` | A different random 32-byte-or-longer secret | Generate once with `openssl rand -base64 32` |
+| `SANDBOX_SESSION_SECRET` | A different random 32-byte-or-longer secret | Generate once with `openssl rand -base64 32`. Do not rotate in production: sandbox names are derived from this value, and a new secret orphans running workspaces. |
 | `SANDBOX_IMAGE` | Ready Vercel Container Registry tag | Output of `environments/agent/scripts/publish-vcr.sh` after the image build is ready |
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY`, `GITHUB_TOKEN_ENCRYPTION_KEY`, or `SANDBOX_SESSION_SECRET` with a `NEXT_PUBLIC_` prefix.
@@ -19,6 +19,7 @@ Vercel automatically supplies `VERCEL_OIDC_TOKEN` to deployments. Do not manuall
 
 ```dotenv
 GITHUB_OAUTH_SCOPE=read:user user:email repo
+NEXT_PUBLIC_SITE_URL=https://<production-domain>
 SANDBOX_SESSION_TIMEOUT_MS=900000
 SANDBOX_LEASE_EXTENSION_MS=300000
 SANDBOX_VCPUS=2
