@@ -89,6 +89,12 @@ export interface SandboxGitDiff {
   truncated: boolean;
 }
 
+export interface SandboxActiveRepository {
+  fullName: string;
+  defaultBranch: string;
+  directory: string;
+}
+
 export interface SandboxPushedBranch {
   fullName: string;
   branch: string;
@@ -114,10 +120,11 @@ export interface SandboxRuntime {
   ): Promise<SandboxRepositoryClone>;
   gitStatus(name: string): Promise<SandboxGitStatus>;
   gitDiff(name: string): Promise<SandboxGitDiff>;
+  readActiveRepository(name: string): Promise<SandboxActiveRepository>;
   commitAndPushActiveRepository(
     name: string,
     accessToken: string,
-    input: { branch: string; message: string },
+    input: { branch: string; message: string; fullName: string; defaultBranch: string },
   ): Promise<SandboxPushedBranch>;
   openTerminal(
     name: string,

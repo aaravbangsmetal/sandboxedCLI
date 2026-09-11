@@ -1,5 +1,5 @@
 import { requireGitHubSession } from "@/lib/auth/require-session";
-import { createGitHubPullRequest } from "@/lib/github/client";
+import { createGitHubPullRequest, fetchGitHubRepository, GitHubApiError } from "@/lib/github/client";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
@@ -35,12 +35,20 @@ export async function POST(request: Request) {
     const session = await requireGitHubSession();
     const input = parsePullRequestRequest(await request.json());
     const identity = await getOrCreateWorkspaceIdentity();
-    const pushed = await withSandboxMutationLock(identity.sandboxName, () =>
-      getSandboxRuntime().commitAndPushActiveRepository(identity.sandboxName, session.accessToken, {
+    const sandboxRuntime = getSandboxRuntime();
+    const pushed = await withSandboxMutationLock(identity.sandboxName, async () => {
+      const active = await sandboxRuntime.readActiveRepository(identity.sandboxName);
+      const repository = await fetchGitHubRepository(session.accessToken, active.fullName);
+      if (!repository.permissions.push) {
+        throw new GitHubApiError("Repository cannot be updated with the current GitHub access.", 403);
+      }
+      return sandboxRuntime.commitAndPushActiveRepository(identity.sandboxName, session.accessToken, {
         branch: input.branch,
         message: input.title,
-      }),
-    );
+        fullName: repository.fullName,
+        defaultBranch: repository.defaultBranch,
+      });
+    });
     const pullRequest = await createGitHubPullRequest(session.accessToken, pushed.fullName, {
       title: input.title,
       body:

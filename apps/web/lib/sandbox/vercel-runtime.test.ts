@@ -276,6 +276,8 @@ describe("VercelSandboxRuntime", () => {
       new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
         branch: "sandboxedcli/test-change",
         message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
       }),
     ).resolves.toEqual({
       fullName: "octocat/hello-world",
@@ -309,8 +311,40 @@ describe("VercelSandboxRuntime", () => {
       new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
         branch: "sandboxedcli/test-change",
         message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
       }),
     ).rejects.toThrow("There are no repository changes to deliver.");
+  });
+
+  it("refuses delivery onto the repository default branch", async () => {
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "main",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow('Refusing to push delivery onto protected branch "main".');
+  });
+
+  it("refuses delivery when staged files look like secrets", async () => {
+    const sandbox = fakeSandbox();
+    sandbox.runCommand.mockResolvedValueOnce({
+      exitCode: 20,
+      stdout: async () => "",
+      stderr: async () => "",
+    });
+    sdk.get.mockResolvedValueOnce(sandbox);
+
+    await expect(
+      new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "gho_token", {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow("Delivery refused because staged files look like secrets.");
   });
 
   it("stops to a snapshot and permanently deletes snapshots on destroy", async () => {

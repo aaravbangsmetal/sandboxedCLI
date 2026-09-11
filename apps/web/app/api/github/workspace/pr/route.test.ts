@@ -6,6 +6,7 @@ const auth = vi.hoisted(() => ({
 
 const github = vi.hoisted(() => ({
   createGitHubPullRequest: vi.fn(),
+  fetchGitHubRepository: vi.fn(),
 }));
 
 const identity = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const lock = vi.hoisted(() => ({
 const runtime = vi.hoisted(() => ({
   sandboxRuntime: {
     commitAndPushActiveRepository: vi.fn(),
+    readActiveRepository: vi.fn(),
   },
   getSandboxRuntime: vi.fn(),
 }));
@@ -27,7 +29,10 @@ vi.mock("@/lib/auth/require-session", () => ({
   AuthenticationRequiredError: class AuthenticationRequiredError extends Error {},
   requireGitHubSession: auth.requireGitHubSession,
 }));
-vi.mock("@/lib/github/client", () => github);
+vi.mock("@/lib/github/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/github/client")>();
+  return { ...actual, ...github };
+});
 vi.mock("@/lib/sandbox/identity", () => identity);
 vi.mock("@/lib/sandbox/mutation-lock", () => lock);
 vi.mock("@/lib/sandbox/runtime", () => ({
@@ -57,6 +62,16 @@ describe("POST /api/github/workspace/pr", () => {
       work(),
     );
     runtime.getSandboxRuntime.mockReturnValue(runtime.sandboxRuntime);
+    runtime.sandboxRuntime.readActiveRepository.mockResolvedValue({
+      fullName: "octocat/hello-world",
+      defaultBranch: "main",
+      directory: "/vercel/sandbox/repos/octocat__hello-world",
+    });
+    github.fetchGitHubRepository.mockResolvedValue({
+      fullName: "octocat/hello-world",
+      defaultBranch: "main",
+      permissions: { admin: false, maintain: false, push: true, triage: false, pull: true },
+    });
     runtime.sandboxRuntime.commitAndPushActiveRepository.mockResolvedValue({
       fullName: "octocat/hello-world",
       branch: "sandboxedcli/test-change",
@@ -87,7 +102,12 @@ describe("POST /api/github/workspace/pr", () => {
     expect(runtime.sandboxRuntime.commitAndPushActiveRepository).toHaveBeenCalledWith(
       "sandboxed-cli-test",
       "gho_token",
-      { branch: "sandboxedcli/test-change", message: "Apply sandbox changes" },
+      {
+        branch: "sandboxedcli/test-change",
+        message: "Apply sandbox changes",
+        fullName: "octocat/hello-world",
+        defaultBranch: "main",
+      },
     );
     expect(github.createGitHubPullRequest).toHaveBeenCalledWith(
       "gho_token",

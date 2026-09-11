@@ -11,9 +11,11 @@ import {
 import {
   InvalidTerminalIdError,
   NoRepositoryChangesError,
+  ProtectedBranchError,
   RepositoryWorkspaceError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
+  SensitiveWorkspaceFilesError,
 } from "./errors";
 import { UnsafeSandboxRequestError } from "./request-security";
 
@@ -44,6 +46,9 @@ export function sandboxErrorResponse(error: unknown) {
   }
   if (error instanceof NoRepositoryChangesError) {
     return sandboxJson({ error: error.message, code: "no_repository_changes" }, { status: 409 });
+  }
+  if (error instanceof ProtectedBranchError || error instanceof SensitiveWorkspaceFilesError) {
+    return sandboxJson({ error: error.message, code: "unsafe_delivery" }, { status: 400 });
   }
   if (error instanceof GitHubApiError) {
     if (error.status === 401) {
