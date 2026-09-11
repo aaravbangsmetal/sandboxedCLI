@@ -207,6 +207,9 @@ test("opens a cloned GitHub repository in a fresh terminal", async ({ page }) =>
     "aria-selected",
     "true",
   );
+  await expect(page.getByText("active: octocat/hello-world", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: ">_refresh" }).click();
+  await expect(page.getByText("1 repositories ready", { exact: true })).toBeVisible();
 });
 
 test("preserves mock command history independently between tabs", async ({ page }, testInfo) => {
@@ -261,6 +264,19 @@ test("reviews workspace changes and opens a pull request", async ({ page }) => {
     "href",
     "https://github.com/octocat/hello-world/pull/12",
   );
+});
+
+test("validates an optional delivery branch before opening a pull request", async ({ page }) => {
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_review" }).click();
+  const branch = page.getByRole("textbox", { name: "branch" });
+  const deliver = page.getByRole("button", { name: ">_open pr" });
+
+  await branch.fill("not a branch");
+  await expect(deliver).toBeDisabled();
+  await expect(page.getByText("use letters, numbers, `.`, `_`, `/`, or `-`", { exact: true })).toBeVisible();
+  await branch.fill("sandboxedcli/reviewable-change");
+  await expect(deliver).toBeEnabled();
 });
 
 test("fits the mobile viewport and keeps the footer readable", async ({ page }, testInfo) => {
