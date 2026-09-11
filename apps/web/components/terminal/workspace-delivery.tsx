@@ -106,7 +106,7 @@ export function WorkspaceDelivery() {
     } finally {
       setBusy(null);
     }
-  }, [body, title]);
+  }, [body, branch, title]);
 
   return (
     <aside className={styles.deliveryPanel} aria-label="GitHub delivery controls">

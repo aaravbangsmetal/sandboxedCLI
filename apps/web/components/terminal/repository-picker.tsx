@@ -45,7 +45,9 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [selected, setSelected] = useState("");
-  const [activeRepository, setActiveRepository] = useState("");
+  const [activeRepository, setActiveRepository] = useState(() =>
+    typeof window === "undefined" ? "" : sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "",
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("checking github");
@@ -98,10 +100,6 @@ export function RepositoryPicker({ onRepositoryReady }: RepositoryPickerProps) {
       window.clearTimeout(timer);
     };
   }, [loadRepositories]);
-
-  useEffect(() => {
-    setActiveRepository(sessionStorage.getItem(ACTIVE_REPOSITORY_KEY) ?? "");
-  }, []);
 
   const cloneRepository = useCallback(async () => {
     if (!selectedRepo) return;

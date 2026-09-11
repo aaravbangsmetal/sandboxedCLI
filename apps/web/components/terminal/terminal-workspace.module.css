@@ -453,6 +453,17 @@
     padding: 24px 20px;
   }
 
+  .connectionStatus,
+  .retryTerminal {
+    position: static;
+    display: inline-block;
+    margin: 0 12px 8px 0;
+  }
+
+  .retryTerminal {
+    font-size: inherit;
+  }
+
   .footer {
     grid-template-columns: auto 1fr auto;
     gap: 10px 16px;
