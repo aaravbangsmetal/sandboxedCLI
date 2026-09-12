@@ -203,12 +203,16 @@ export function parseRepositoryFullName(fullName: string) {
 
 export async function fetchGitHubRepository(accessToken: string, fullName: string) {
   const { owner, repo } = parseRepositoryFullName(fullName);
-  return normalizeRepository(
+  const repository = normalizeRepository(
     await githubJson<GitHubRepoResponse>(
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       { headers: githubHeaders(accessToken) },
     ),
   );
+  if (repository.fullName.toLowerCase() !== `${owner}/${repo}`.toLowerCase()) {
+    throw new GitHubApiError("GitHub returned a different repository than requested.", 409);
+  }
+  return repository;
 }
 
 export async function listGitHubRepositories(accessToken: string) {
