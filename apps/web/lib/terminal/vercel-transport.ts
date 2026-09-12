@@ -40,7 +40,7 @@ export class VercelTerminalTransport implements TerminalTransport {
   private disposed = false;
   private generation = 0;
   private reconnectAttempt = 0;
-  private reconnectTimer: number | null = null;
+  private inflight: Promise<void> | null = null;
   private inputQueue: Uint8Array[] = [];
   private queuedInputBytes = 0;
   private size = { cols: 80, rows: 24 };
@@ -95,6 +95,14 @@ export class VercelTerminalTransport implements TerminalTransport {
   }
 
   private async open(reconnecting: boolean) {
+    if (this.inflight) return this.inflight;
+    this.inflight = this.openConnection(reconnecting).finally(() => {
+      this.inflight = null;
+    });
+    return this.inflight;
+  }
+
+  private async openConnection(reconnecting: boolean) {
     const generation = ++this.generation;
     this.onStateChange?.(reconnecting ? "reconnecting" : "connecting");
 
