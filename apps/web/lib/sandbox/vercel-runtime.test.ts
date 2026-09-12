@@ -180,6 +180,7 @@ describe("VercelSandboxRuntime", () => {
     );
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).not.toContain("extraheader");
     expect(command.args.join(" ")).toContain("active_repo_path");
     expect(command.args.join(" ")).toContain("active_repo_full_name");
     expect(command.args.join(" ")).toContain("active_repo_default_branch");
@@ -335,6 +336,7 @@ describe("VercelSandboxRuntime", () => {
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).toContain("push origin");
     expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).not.toContain("extraheader");
   });
 
   it("reports clean active repositories before trying to open delivery", async () => {
