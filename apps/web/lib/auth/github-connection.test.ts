@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => database,
 }));
 
-import { deleteGitHubConnection, getGitHubConnection, saveGitHubConnection } from "./github-connection";
+import { clearSandboxFirstStarted, deleteGitHubConnection, getGitHubConnection, markSandboxFirstStarted, saveGitHubConnection } from "./github-connection";
 
 const connection = {
   accessToken: "gho_secret-token",
@@ -92,5 +92,25 @@ describe("GitHub connection persistence", () => {
     await deleteGitHubConnection("supabase-user-id");
     expect(database.from).toHaveBeenCalledWith("github_connections");
     expect(eq).toHaveBeenCalledWith("user_id", "supabase-user-id");
+  });
+
+  it("records the first sandbox start once", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { first_started_at: "2026-09-04T00:00:00.000Z" }, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    database.from.mockReturnValue({ select });
+
+    await expect(markSandboxFirstStarted("supabase-user-id")).resolves.toBe(
+      Date.parse("2026-09-04T00:00:00.000Z"),
+    );
+  });
+
+  it("clears the sandbox lease start after destroy", async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    database.from.mockReturnValue({ update });
+
+    await clearSandboxFirstStarted("supabase-user-id");
+    expect(update).toHaveBeenCalledWith({ first_started_at: null });
   });
 });

@@ -413,4 +413,17 @@ describe("VercelSandboxRuntime", () => {
     });
     expect(stopped.extendTimeout).not.toHaveBeenCalled();
   });
+
+  it("caps lease extensions from the first start time", async () => {
+    const running = fakeSandbox("running");
+    running.expiresAt = new Date("2026-09-03T04:10:00Z");
+    sdk.get.mockResolvedValueOnce(running);
+
+    await new VercelSandboxRuntime().extend(
+      "sandboxed-cli-test",
+      300_000,
+      Date.parse("2026-09-03T00:00:00.000Z"),
+    );
+    expect(running.extendTimeout).not.toHaveBeenCalled();
+  });
 });

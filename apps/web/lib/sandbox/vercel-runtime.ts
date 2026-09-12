@@ -581,10 +581,10 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     return { sandbox: toStatus(refreshed), snapshotId: stopped.snapshot?.id };
   }
 
-  async extend(name: string, durationMs: number) {
+  async extend(name: string, durationMs: number, firstStartedAtMs?: number) {
     const sandbox = await getSandbox(name);
     if (sandbox.status !== "running") return toStatus(sandbox);
-    const startedAt = sandbox.createdAt?.getTime() ?? Date.now();
+    const startedAt = firstStartedAtMs ?? sandbox.createdAt?.getTime() ?? Date.now();
     const expiresAt = sandbox.expiresAt?.getTime() ?? Date.now() + sandboxConfig.timeoutMs;
     const cap = startedAt + sandboxConfig.maxLifetimeMs;
     const extendBy = Math.min(durationMs, cap - expiresAt);

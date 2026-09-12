@@ -9,6 +9,7 @@ const WORKSPACE_ID_PATTERN = /^[a-f0-9]{64}$/;
 export interface WorkspaceIdentity {
   id: string;
   sandboxName: string;
+  userId: string;
 }
 
 function sessionSecret() {
@@ -32,13 +33,14 @@ export function deriveUserWorkspaceId(userId: string) {
   return createHmac("sha256", sessionSecret()).update(`user:${userId}`).digest("hex");
 }
 
-function toIdentity(id: string): WorkspaceIdentity {
-  return { id, sandboxName: deriveSandboxName(id) };
+function toIdentity(userId: string): WorkspaceIdentity {
+  const id = deriveUserWorkspaceId(userId);
+  return { id, sandboxName: deriveSandboxName(id), userId };
 }
 
 export async function getWorkspaceIdentity() {
   const session = await requireGitHubSession();
-  return toIdentity(deriveUserWorkspaceId(session.account.id));
+  return toIdentity(session.account.id);
 }
 
 export async function getOrCreateWorkspaceIdentity() {

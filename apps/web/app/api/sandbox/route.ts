@@ -1,3 +1,4 @@
+import { clearSandboxFirstStarted, markSandboxFirstStarted } from "@/lib/auth/github-connection";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
 import { withSandboxMutationLock } from "@/lib/sandbox/mutation-lock";
@@ -35,9 +36,11 @@ export async function POST(request: Request) {
     assertSafeMutationRequest(request);
     const identity = await getOrCreateWorkspaceIdentity();
     assertRateLimit(`${identity.id}:start`, 20, 10 * 60_000);
-    const sandbox = await withSandboxMutationLock(identity.sandboxName, () =>
-      getSandboxRuntime().ensureRunning(identity.sandboxName),
-    );
+    const sandbox = await withSandboxMutationLock(identity.sandboxName, async () => {
+      const status = await getSandboxRuntime().ensureRunning(identity.sandboxName);
+      await markSandboxFirstStarted(identity.userId);
+      return status;
+    });
     return sandboxJson({ configured: true, sandbox });
   } catch (error) {
     return sandboxErrorResponse(error);
@@ -56,9 +59,10 @@ export async function DELETE(request: Request) {
     }
     const identity = await getOrCreateWorkspaceIdentity();
     assertRateLimit(`${identity.id}:destroy`, 8, 10 * 60_000);
-    await withSandboxMutationLock(identity.sandboxName, () =>
-      getSandboxRuntime().destroy(identity.sandboxName),
-    );
+    await withSandboxMutationLock(identity.sandboxName, async () => {
+      await getSandboxRuntime().destroy(identity.sandboxName);
+      await clearSandboxFirstStarted(identity.userId);
+    });
     return sandboxJson({ destroyed: true });
   } catch (error) {
     return sandboxErrorResponse(error);
