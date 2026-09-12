@@ -70,7 +70,7 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
 
   const mutate = useCallback(
     async (action: "pause" | "resume" | "extend" | "destroy") => {
-      if (action === "destroy" && !window.confirm("Permanently delete this sandbox and its snapshots?")) return;
+      if (action === "destroy" && !window.confirm("Permanently delete this sandbox and its snapshots? GitHub login is separate and stays until you sign out or revoke access.")) return;
       setBusy(action);
       setFailedAction(null);
       setMessage(`${action === "resume" ? "starting" : action === "destroy" ? "deleting" : action === "pause" ? "pausing" : "extending"} workspace`);

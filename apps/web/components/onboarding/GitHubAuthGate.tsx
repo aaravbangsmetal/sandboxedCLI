@@ -46,6 +46,8 @@ export function GitHubAuthGate() {
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as SessionResponse | null;
         if (!response.ok) throw new Error(body?.error || "GitHub session check failed.");
+        const oauthError = new URLSearchParams(window.location.search).get("error");
+        const notice = new URLSearchParams(window.location.search).get("notice");
         if (!active) return;
         setLogin(body?.user?.login ?? "");
         if (body?.authenticated) {
@@ -54,6 +56,11 @@ export function GitHubAuthGate() {
         }
         if (oauthError) {
           setError(oauthError.replaceAll("_", " "));
+          setState("error");
+          return;
+        }
+        if (notice === "workspace_pause_failed") {
+          setError("signed out; workspace pause failed");
           setState("error");
           return;
         }

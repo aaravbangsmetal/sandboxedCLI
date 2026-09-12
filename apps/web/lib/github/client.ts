@@ -252,7 +252,7 @@ export async function createGitHubPullRequest(
         body: input.body,
         head: input.head,
         base: input.base,
-        maintainer_can_modify: true,
+        maintainer_can_modify: false,
       }),
     },
   );

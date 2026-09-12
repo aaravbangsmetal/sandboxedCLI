@@ -79,22 +79,25 @@ export function TerminalWorkspace() {
     try {
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem("sandboxedcli.active-repository.v1");
-      await Promise.allSettled([
-        fetch("/api/sandbox/pause", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: "{}",
-          keepalive: true,
-        }),
-        fetch("/api/auth/session", {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: "{}",
-          keepalive: true,
-        }),
-      ]);
-    } finally {
-      router.replace("/");
+      const pause = fetch("/api/sandbox/pause", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        keepalive: true,
+      });
+      const session = fetch("/api/auth/session", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        keepalive: true,
+      });
+      const [pauseResult] = await Promise.allSettled([pause, session]);
+      const pauseFailed =
+        pauseResult.status === "rejected" ||
+        (pauseResult.status === "fulfilled" && !pauseResult.value.ok);
+      router.replace(pauseFailed ? "/auth?notice=workspace_pause_failed" : "/auth");
+    } catch {
+      router.replace("/auth");
     }
   }, [router]);
   const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
@@ -150,7 +153,7 @@ export function TerminalWorkspace() {
 
   const destroyWorkspace = useCallback(() => {
     tabs.forEach((tab) => tab.transport.dispose());
-    router.replace("/");
+    router.replace("/auth");
   }, [router, tabs]);
 
   useEffect(() => {
