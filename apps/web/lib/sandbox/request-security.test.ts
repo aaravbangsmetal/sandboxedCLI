@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -9,6 +9,11 @@ function request(headers: Record<string, string>) {
 }
 
 describe("sandbox mutation security", () => {
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    delete process.env.VERCEL_URL;
+  });
   it("accepts same-origin JSON mutations", () => {
     expect(() =>
       assertSafeMutationRequest(
@@ -49,5 +54,19 @@ describe("sandbox mutation security", () => {
         }),
       ),
     ).toThrow(UnsafeSandboxRequestError);
+  });
+
+  it("ignores a spoofed Host when a site URL is configured", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://sandboxedcli.xyz";
+    expect(() =>
+      assertSafeMutationRequest(
+        request({
+          "content-type": "application/json",
+          host: "attacker.example",
+          origin: "https://attacker.example",
+        }),
+      ),
+    ).toThrow(UnsafeSandboxRequestError);
+    delete process.env.NEXT_PUBLIC_SITE_URL;
   });
 });
