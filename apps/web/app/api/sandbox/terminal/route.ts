@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const session = await requireGitHubSession();
     assertRateLimit(`${session.account.id}:terminal`, 30, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
-    const connection = await withSandboxMutationLock(identity.sandboxName, () =>
+    const connection = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().openTerminal(
         identity.sandboxName,
         terminalId,
@@ -48,7 +48,7 @@ export async function DELETE(request: Request) {
     const terminalId = validateTerminalId(typeof body.terminalId === "string" ? body.terminalId : "");
     await requireGitHubSession();
     const identity = await getWorkspaceIdentity();
-    await withSandboxMutationLock(identity.sandboxName, () =>
+    await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().killTerminal(identity.sandboxName, terminalId),
     );
     return sandboxJson({ terminated: true });

@@ -91,9 +91,9 @@ describe("VercelSandboxRuntime", () => {
         args: expect.arrayContaining(["-A", "sc-terminal-one"]),
       }),
     );
-    expect(sandbox.runCommand.mock.calls[0]?.[0]).not.toHaveProperty("env");
-    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
-    expect(command.args.join(" ")).not.toContain("gho_token");
+    const firstCall = sandbox.runCommand.mock.calls.at(0)?.at(0) as unknown as { args: string[]; env?: unknown };
+    expect(firstCall.env).toBeUndefined();
+    expect(firstCall.args.join(" ")).not.toContain("gho_token");
   });
 
   it("reports sandbox image health from the baked environment command", async () => {

@@ -40,6 +40,7 @@ export class VercelTerminalTransport implements TerminalTransport {
   private disposed = false;
   private generation = 0;
   private reconnectAttempt = 0;
+  private reconnectTimer: number | null = null;
   private inflight: Promise<void> | null = null;
   private inputQueue: Uint8Array[] = [];
   private queuedInputBytes = 0;

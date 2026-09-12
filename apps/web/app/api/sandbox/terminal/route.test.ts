@@ -42,8 +42,14 @@ describe("/api/sandbox/terminal", () => {
       accessToken: "gho_token",
       account: { id: "supabase-user-id" },
     });
-    identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
-    identity.getWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-user" });
+    identity.getOrCreateWorkspaceIdentity.mockResolvedValue({
+      sandboxName: "sandboxed-cli-user",
+      userId: "supabase-user-id",
+    });
+    identity.getWorkspaceIdentity.mockResolvedValue({
+      sandboxName: "sandboxed-cli-user",
+      userId: "supabase-user-id",
+    });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
       work(),
     );
@@ -64,7 +70,7 @@ describe("/api/sandbox/terminal", () => {
       { cols: 120, rows: 40 },
       "gho_token",
     );
-    expect(lock.withSandboxMutationLock).toHaveBeenCalledWith("sandboxed-cli-user", expect.any(Function));
+    expect(lock.withSandboxMutationLock).toHaveBeenCalledWith("supabase-user-id", expect.any(Function));
     const body = await response.text();
     expect(body).not.toContain("gho_token");
   });

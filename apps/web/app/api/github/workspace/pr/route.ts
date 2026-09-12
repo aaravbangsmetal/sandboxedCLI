@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     assertRateLimit(`${session.account.id}:pr`, 8, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
     const sandboxRuntime = getSandboxRuntime();
-    const pushed = await withSandboxMutationLock(identity.sandboxName, async () => {
+    const pushed = await withSandboxMutationLock(identity.userId, async () => {
       const active = await sandboxRuntime.readActiveRepository(identity.sandboxName);
       const repository = await fetchGitHubRepository(session.accessToken, active.fullName);
       if (!repository.permissions.push) {

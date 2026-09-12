@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     assertSafeMutationRequest(request);
     const identity = await getOrCreateWorkspaceIdentity();
     assertRateLimit(`${identity.id}:pause`, 20, 10 * 60_000);
-    const result = await withSandboxMutationLock(identity.sandboxName, () =>
+    const result = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().pause(identity.sandboxName),
     );
     return sandboxJson(result);

@@ -16,6 +16,7 @@ import {
   ProtectedBranchError,
   PullRequestCreateError,
   RepositoryWorkspaceError,
+  SandboxBusyError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
   SensitiveWorkspaceFilesError,
@@ -32,6 +33,9 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
 export async function sandboxErrorResponse(error: unknown) {
   if (error instanceof RateLimitError) {
     return sandboxJson({ error: error.message, code: "rate_limited" }, { status: 429 });
+  }
+  if (error instanceof SandboxBusyError) {
+    return sandboxJson({ error: error.message, code: "sandbox_busy" }, { status: 409 });
   }
   if (error instanceof AuthenticationRequiredError) {
     return sandboxJson({ error: error.message, code: "authentication_required" }, { status: 401 });

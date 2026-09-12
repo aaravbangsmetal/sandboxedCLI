@@ -41,7 +41,6 @@ export function GitHubAuthGate() {
 
   useEffect(() => {
     let active = true;
-    const oauthError = new URLSearchParams(window.location.search).get("error");
     void fetch("/api/auth/session", { cache: "no-store" })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as SessionResponse | null;

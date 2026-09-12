@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     assertSafeMutationRequest(request);
     const identity = await getOrCreateWorkspaceIdentity();
     const sandboxRuntime = getSandboxRuntime();
-    const environment = await withSandboxMutationLock(identity.sandboxName, async () => {
+    const environment = await withSandboxMutationLock(identity.userId, async () => {
       await sandboxRuntime.ensureRunning(identity.sandboxName);
       return sandboxRuntime.checkEnvironment(identity.sandboxName);
     });

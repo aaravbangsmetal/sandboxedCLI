@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     }
 
     const identity = await getOrCreateWorkspaceIdentity();
-    const clone = await withSandboxMutationLock(identity.sandboxName, () =>
+    const clone = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().cloneRepository(
         identity.sandboxName,
         repository,

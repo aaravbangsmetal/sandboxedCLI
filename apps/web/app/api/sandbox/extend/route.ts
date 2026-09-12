@@ -1,4 +1,4 @@
-import { clearSandboxFirstStarted, markSandboxFirstStarted } from "@/lib/auth/github-connection";
+import { markSandboxFirstStarted } from "@/lib/auth/github-connection";
 import { sandboxConfig } from "@/lib/sandbox/config";
 import { getOrCreateWorkspaceIdentity } from "@/lib/sandbox/identity";
 import { sandboxErrorResponse, sandboxJson } from "@/lib/sandbox/http";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const identity = await getOrCreateWorkspaceIdentity();
     assertRateLimit(`${identity.id}:extend`, 20, 10 * 60_000);
     const firstStartedAtMs = await markSandboxFirstStarted(identity.userId);
-    const sandbox = await withSandboxMutationLock(identity.sandboxName, () =>
+    const sandbox = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().extend(identity.sandboxName, sandboxConfig.leaseExtensionMs, firstStartedAtMs),
     );
     return sandboxJson({ sandbox });
