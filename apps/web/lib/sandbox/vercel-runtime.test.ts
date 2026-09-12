@@ -88,10 +88,10 @@ describe("VercelSandboxRuntime", () => {
     expect(sandbox.runCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         cmd: "tmux",
-        env: { GITHUB_TOKEN: "gho_token", GH_TOKEN: "gho_token" },
         args: expect.arrayContaining(["-A", "sc-terminal-one"]),
       }),
     );
+    expect(sandbox.runCommand.mock.calls[0]?.[0]).not.toHaveProperty("env");
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).not.toContain("gho_token");
   });

@@ -520,6 +520,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     size: { cols: number; rows: number },
     githubAccessToken: string,
   ): Promise<TerminalConnection> {
+    void githubAccessToken;
     const sandbox = await Sandbox.getOrCreate({
       name,
       image: sandboxConfig.image,
@@ -548,7 +549,6 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         `${sandboxConfig.stateDirectory}/bashrc`,
       ],
       cwd: sandboxConfig.cwd,
-      env: { GITHUB_TOKEN: githubAccessToken, GH_TOKEN: githubAccessToken },
       timeoutMs: 30_000,
     });
     if (terminal.exitCode !== 0) throw new Error((await terminal.stderr()) || "Unable to start terminal.");
