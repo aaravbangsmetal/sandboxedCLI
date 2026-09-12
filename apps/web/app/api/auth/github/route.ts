@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { githubAuthConfig } from "@/lib/auth/config";
+import { publicOrigin } from "@/lib/auth/public-origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
-    const callbackUrl = new URL("/api/auth/github/callback", request.url);
+    const callbackUrl = new URL("/api/auth/github/callback", publicOrigin(request));
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
