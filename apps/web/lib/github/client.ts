@@ -82,6 +82,14 @@ export class GitHubApiError extends Error {
   }
 }
 
+export function isExpiredGitHubAccess(error: GitHubApiError) {
+  if (error.status === 401) return true;
+  if (error.status !== 403) return false;
+  return /bad credentials|requires authentication|token expired|token revoked|bad token/i.test(
+    error.message,
+  );
+}
+
 function githubHeaders(accessToken?: string) {
   return {
     accept: "application/vnd.github+json",

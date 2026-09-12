@@ -28,5 +28,9 @@ describe("sandboxErrorResponse", () => {
     const forbidden = await sandboxErrorResponse(new GitHubApiError("Resource not accessible", 403));
     expect(forbidden.status).toBe(403);
     await expect(forbidden.json()).resolves.toMatchObject({ code: "github_forbidden" });
+
+    const expired = await sandboxErrorResponse(new GitHubApiError("Bad credentials", 403));
+    expect(expired.status).toBe(401);
+    await expect(expired.json()).resolves.toMatchObject({ code: "authentication_required" });
   });
 });

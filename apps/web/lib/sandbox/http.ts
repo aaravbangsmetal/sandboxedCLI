@@ -4,7 +4,7 @@ import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
 import { dropGitHubConnectionIfPresent } from "@/lib/auth/session";
-import { GitHubApiError } from "@/lib/github/client";
+import { GitHubApiError, isExpiredGitHubAccess } from "@/lib/github/client";
 import {
   AuthenticationRequiredError,
 } from "@/lib/auth/require-session";
@@ -67,7 +67,7 @@ export async function sandboxErrorResponse(error: unknown) {
     );
   }
   if (error instanceof GitHubApiError) {
-    if (error.status === 401) {
+    if (isExpiredGitHubAccess(error)) {
       await dropGitHubConnectionIfPresent().catch(() => undefined);
       return sandboxJson(
         { error: "GitHub access expired. Sign in again.", code: "authentication_required" },
