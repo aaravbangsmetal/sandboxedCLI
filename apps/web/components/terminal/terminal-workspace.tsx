@@ -4,12 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { MockTerminalTransport } from "@/lib/terminal/mock-transport";
+import { createSandboxTerminalTransport } from "@/lib/terminal/create-transport";
 import type { TerminalTransport } from "@/lib/terminal/transport";
-import {
-  type TerminalConnectionState,
-  VercelTerminalTransport,
-} from "@/lib/terminal/vercel-transport";
+import { type TerminalConnectionState } from "@/lib/terminal/vercel-transport";
 
 import styles from "./terminal-workspace.module.css";
 import { RepositoryPicker } from "./repository-picker";
@@ -103,13 +100,12 @@ export function TerminalWorkspace() {
   const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
   const createTransport = useCallback(
     (id: string): TerminalTransport =>
-      process.env.NEXT_PUBLIC_SANDBOX_TRANSPORT === "mock"
-        ? new MockTerminalTransport({ onLogout: logout })
-        : new VercelTerminalTransport(id, {
-            onStateChange: (state) => {
-              setConnectionStates((current) => ({ ...current, [id]: state }));
-            },
-          }),
+      createSandboxTerminalTransport(id, {
+        onLogout: logout,
+        onStateChange: (state) => {
+          setConnectionStates((current) => ({ ...current, [id]: state }));
+        },
+      }),
     [logout],
   );
   const materialize = useCallback(
