@@ -33,6 +33,8 @@ interface StoredWorkspace {
 const STORAGE_KEY = "sandboxedcli.terminals.v1";
 const DEFAULT_TAB = { id: "terminal-default", title: "$_terminal 1" } as const;
 const MAX_TERMINALS = 8;
+const MAX_LIVE_PTYS = 3;
+const IDLE_PTY_MS = 45_000;
 const REPOSITORY_DIRECTORY = /^\/vercel\/sandbox\/repos\/[A-Za-z0-9_.-]+$/;
 
 function shellSingleQuote(value: string) {
@@ -61,6 +63,15 @@ function isStoredWorkspace(value: unknown): value is StoredWorkspace {
         typeof tab.title === "string",
     )
   );
+}
+
+function keepLivePtys(ids: Set<string>, activeId: string) {
+  const next = new Set<string>([activeId]);
+  for (const id of ids) {
+    if (next.size >= MAX_LIVE_PTYS) break;
+    next.add(id);
+  }
+  return next;
 }
 
 function nextTitle(tabs: readonly StoredTerminalTab[]) {
@@ -199,7 +210,7 @@ export function TerminalWorkspace() {
       });
       setTabs((current) => [...current, { ...tab, startupCommand }]);
       setActiveId(tab.id);
-      setActivatedIds((current) => new Set(current).add(tab.id));
+      setActivatedIds((current) => keepLivePtys(new Set(current).add(tab.id), tab.id));
     },
     [materialize, tabs],
   );
@@ -267,7 +278,7 @@ export function TerminalWorkspace() {
 
   const selectAndFocusTab = useCallback((id: string) => {
     setActiveId(id);
-    setActivatedIds((current) => new Set(current).add(id));
+    setActivatedIds((current) => keepLivePtys(new Set(current).add(id), id));
     requestAnimationFrame(() => tabButtons.current.get(id)?.focus());
   }, []);
 
@@ -292,6 +303,16 @@ export function TerminalWorkspace() {
     },
     [closeTab, selectAndFocusTab, tabs],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setActivatedIds((current) => {
+        if (current.size <= 1) return current;
+        return new Set([activeId]);
+      });
+    }, IDLE_PTY_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeId]);
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
