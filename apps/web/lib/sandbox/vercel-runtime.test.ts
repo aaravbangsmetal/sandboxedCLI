@@ -335,6 +335,8 @@ describe("VercelSandboxRuntime", () => {
     );
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).toContain("push origin");
+    expect(command.args.join(" ")).toContain("npmrc");
+    expect(command.args.join(" ")).toContain('checkout "$previous"');
     expect(command.args.join(" ")).not.toContain("gho_token");
     expect(command.args.join(" ")).not.toContain("extraheader");
   });
