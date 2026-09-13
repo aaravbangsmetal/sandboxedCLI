@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter web build",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "rootDirectory": "apps/web"
+}
