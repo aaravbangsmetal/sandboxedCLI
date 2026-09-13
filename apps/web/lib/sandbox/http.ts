@@ -4,7 +4,7 @@ import { APIError } from "@vercel/sandbox";
 import { NextResponse } from "next/server";
 
 import { dropGitHubConnectionIfPresent } from "@/lib/auth/session";
-import { GitHubApiError } from "@/lib/github/client";
+import { GitHubApiError, isExpiredGitHubAccess } from "@/lib/github/client";
 import {
   AuthenticationRequiredError,
 } from "@/lib/auth/require-session";
@@ -16,6 +16,7 @@ import {
   ProtectedBranchError,
   PullRequestCreateError,
   RepositoryWorkspaceError,
+  SandboxBusyError,
   SandboxNotConfiguredError,
   SandboxNotFoundError,
   SensitiveWorkspaceFilesError,
@@ -32,6 +33,9 @@ export function sandboxJson(body: unknown, init: ResponseInit = {}) {
 export async function sandboxErrorResponse(error: unknown) {
   if (error instanceof RateLimitError) {
     return sandboxJson({ error: error.message, code: "rate_limited" }, { status: 429 });
+  }
+  if (error instanceof SandboxBusyError) {
+    return sandboxJson({ error: error.message, code: "sandbox_busy" }, { status: 409 });
   }
   if (error instanceof AuthenticationRequiredError) {
     return sandboxJson({ error: error.message, code: "authentication_required" }, { status: 401 });
@@ -67,7 +71,7 @@ export async function sandboxErrorResponse(error: unknown) {
     );
   }
   if (error instanceof GitHubApiError) {
-    if (error.status === 401) {
+    if (isExpiredGitHubAccess(error)) {
       await dropGitHubConnectionIfPresent().catch(() => undefined);
       return sandboxJson(
         { error: "GitHub access expired. Sign in again.", code: "authentication_required" },

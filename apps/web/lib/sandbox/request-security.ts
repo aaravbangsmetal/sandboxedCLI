@@ -15,7 +15,7 @@ function hostFromUrl(value: string) {
   }
 }
 
-function configuredHosts() {
+export function configuredHosts() {
   const hosts = new Set<string>();
   for (const value of [
     process.env.NEXT_PUBLIC_SITE_URL,
@@ -36,13 +36,20 @@ export function assertSafeMutationRequest(request: Request) {
   }
 
   const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
-  if (!origin || !host) throw new UnsafeSandboxRequestError("A same-origin request is required.");
+  if (!origin) throw new UnsafeSandboxRequestError("A same-origin request is required.");
 
   const originHost = hostFromUrl(origin);
   if (!originHost) throw new UnsafeSandboxRequestError("The request origin is invalid.");
 
   const allowed = configuredHosts();
-  allowed.add(host.toLowerCase());
+  if (allowed.size === 0) {
+    if (process.env.NODE_ENV === "production") {
+      throw new UnsafeSandboxRequestError("A configured site URL is required.");
+    }
+    const host = request.headers.get("host");
+    if (!host) throw new UnsafeSandboxRequestError("A same-origin request is required.");
+    allowed.add(host.toLowerCase());
+  }
+
   if (!allowed.has(originHost)) throw new UnsafeSandboxRequestError("Cross-origin sandbox mutation denied.");
 }

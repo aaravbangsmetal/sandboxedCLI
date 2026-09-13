@@ -58,6 +58,37 @@ export async function saveGitHubConnection(
   if (error) throw new Error(`Unable to persist GitHub access: ${error.message}`);
 }
 
+export async function markSandboxFirstStarted(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const { data: existing, error: loadError } = await supabase
+    .from("github_connections")
+    .select("first_started_at")
+    .eq("user_id", userId)
+    .maybeSingle<{ first_started_at: string | null }>();
+  if (loadError) throw new Error(`Unable to load sandbox lease start: ${loadError.message}`);
+  if (existing?.first_started_at) return new Date(existing.first_started_at).getTime();
+
+  const { data, error } = await supabase
+    .from("github_connections")
+    .update({ first_started_at: now })
+    .eq("user_id", userId)
+    .is("first_started_at", null)
+    .select("first_started_at")
+    .maybeSingle<{ first_started_at: string | null }>();
+  if (error) throw new Error(`Unable to persist sandbox lease start: ${error.message}`);
+  return new Date(data?.first_started_at ?? now).getTime();
+}
+
+export async function clearSandboxFirstStarted(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase
+    .from("github_connections")
+    .update({ first_started_at: null })
+    .eq("user_id", userId);
+  if (error) throw new Error(`Unable to clear sandbox lease start: ${error.message}`);
+}
+
 export async function deleteGitHubConnection(userId: string) {
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("github_connections").delete().eq("user_id", userId);

@@ -32,7 +32,10 @@ import { POST } from "./route";
 describe("POST /api/sandbox/environment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    identity.getOrCreateWorkspaceIdentity.mockResolvedValue({ sandboxName: "sandboxed-cli-test" });
+    identity.getOrCreateWorkspaceIdentity.mockResolvedValue({
+      sandboxName: "sandboxed-cli-test",
+      userId: "supabase-user-id",
+    });
     lock.withSandboxMutationLock.mockImplementation(async (_name: string, work: () => Promise<unknown>) =>
       work(),
     );
@@ -68,6 +71,6 @@ describe("POST /api/sandbox/environment", () => {
     });
     expect(runtime.sandboxRuntime.ensureRunning).toHaveBeenCalledWith("sandboxed-cli-test");
     expect(runtime.sandboxRuntime.checkEnvironment).toHaveBeenCalledWith("sandboxed-cli-test");
-    expect(lock.withSandboxMutationLock).toHaveBeenCalledWith("sandboxed-cli-test", expect.any(Function));
+    expect(lock.withSandboxMutationLock).toHaveBeenCalledWith("supabase-user-id", expect.any(Function));
   });
 });

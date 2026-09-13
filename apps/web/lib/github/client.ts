@@ -82,6 +82,14 @@ export class GitHubApiError extends Error {
   }
 }
 
+export function isExpiredGitHubAccess(error: GitHubApiError) {
+  if (error.status === 401) return true;
+  if (error.status !== 403) return false;
+  return /bad credentials|requires authentication|token expired|token revoked|bad token/i.test(
+    error.message,
+  );
+}
+
 function githubHeaders(accessToken?: string) {
   return {
     accept: "application/vnd.github+json",
@@ -203,12 +211,16 @@ export function parseRepositoryFullName(fullName: string) {
 
 export async function fetchGitHubRepository(accessToken: string, fullName: string) {
   const { owner, repo } = parseRepositoryFullName(fullName);
-  return normalizeRepository(
+  const repository = normalizeRepository(
     await githubJson<GitHubRepoResponse>(
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       { headers: githubHeaders(accessToken) },
     ),
   );
+  if (repository.fullName.toLowerCase() !== `${owner}/${repo}`.toLowerCase()) {
+    throw new GitHubApiError("GitHub returned a different repository than requested.", 409);
+  }
+  return repository;
 }
 
 export async function listGitHubRepositories(accessToken: string) {
@@ -240,7 +252,7 @@ export async function createGitHubPullRequest(
         body: input.body,
         head: input.head,
         base: input.base,
-        maintainer_can_modify: true,
+        maintainer_can_modify: false,
       }),
     },
   );

@@ -56,6 +56,13 @@ export class SensitiveWorkspaceFilesError extends Error {
   }
 }
 
+export class SandboxBusyError extends Error {
+  constructor() {
+    super("Sandbox is busy. Try again shortly.");
+    this.name = "SandboxBusyError";
+  }
+}
+
 export class PullRequestCreateError extends Error {
   constructor(
     readonly pushed: { fullName: string; branch: string; baseBranch: string; commitSha: string },

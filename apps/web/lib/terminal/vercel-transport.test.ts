@@ -173,4 +173,25 @@ describe("VercelTerminalTransport", () => {
     expect(output).not.toHaveBeenCalled();
     transport.dispose();
   });
+
+  it("single-flights overlapping connect attempts", async () => {
+    let resolveFetch: ((value: Response) => void) | undefined;
+    const fetcher = vi.fn(
+      async () =>
+        await new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    const transport = new VercelTerminalTransport("terminal-one", {
+      fetcher: fetcher as typeof fetch,
+      websocketFactory: () => new FakeSocket() as unknown as WebSocket,
+    });
+
+    transport.connect(() => undefined);
+    transport.connect(() => undefined);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    resolveFetch?.(connectionResponse());
+    await flushPromises();
+    transport.dispose();
+  });
 });

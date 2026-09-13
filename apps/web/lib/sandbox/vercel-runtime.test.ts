@@ -88,12 +88,12 @@ describe("VercelSandboxRuntime", () => {
     expect(sandbox.runCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         cmd: "tmux",
-        env: { GITHUB_TOKEN: "gho_token", GH_TOKEN: "gho_token" },
         args: expect.arrayContaining(["-A", "sc-terminal-one"]),
       }),
     );
-    const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
-    expect(command.args.join(" ")).not.toContain("gho_token");
+    const firstCall = sandbox.runCommand.mock.calls.at(0)?.at(0) as unknown as { args: string[]; env?: unknown };
+    expect(firstCall.env).toBeUndefined();
+    expect(firstCall.args.join(" ")).not.toContain("gho_token");
   });
 
   it("reports sandbox image health from the baked environment command", async () => {
@@ -180,6 +180,7 @@ describe("VercelSandboxRuntime", () => {
     );
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).not.toContain("extraheader");
     expect(command.args.join(" ")).toContain("active_repo_path");
     expect(command.args.join(" ")).toContain("active_repo_full_name");
     expect(command.args.join(" ")).toContain("active_repo_default_branch");
@@ -334,7 +335,10 @@ describe("VercelSandboxRuntime", () => {
     );
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).toContain("push origin");
+    expect(command.args.join(" ")).toContain("npmrc");
+    expect(command.args.join(" ")).toContain('checkout "$previous"');
     expect(command.args.join(" ")).not.toContain("gho_token");
+    expect(command.args.join(" ")).not.toContain("extraheader");
   });
 
   it("reports clean active repositories before trying to open delivery", async () => {
@@ -408,5 +412,18 @@ describe("VercelSandboxRuntime", () => {
       state: "stopped",
     });
     expect(stopped.extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it("caps lease extensions from the first start time", async () => {
+    const running = fakeSandbox("running");
+    running.expiresAt = new Date("2026-09-03T04:10:00Z");
+    sdk.get.mockResolvedValueOnce(running);
+
+    await new VercelSandboxRuntime().extend(
+      "sandboxed-cli-test",
+      300_000,
+      Date.parse("2026-09-03T00:00:00.000Z"),
+    );
+    expect(running.extendTimeout).not.toHaveBeenCalled();
   });
 });

@@ -103,6 +103,30 @@ describe("GitHub client", () => {
     });
   });
 
+  it("rejects a repository whose full name does not match the request", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          id: 10,
+          name: "hello-world",
+          full_name: "octocat/redirected",
+          private: false,
+          html_url: "https://github.com/octocat/redirected",
+          clone_url: "https://github.com/octocat/redirected.git",
+          default_branch: "main",
+          pushed_at: null,
+          permissions: { pull: true, push: true },
+        }),
+      ),
+    );
+
+    await expect(fetchGitHubRepository("gho_token", "octocat/hello-world")).rejects.toMatchObject({
+      name: "GitHubApiError",
+      status: 409,
+    });
+  });
+
   it("creates a pull request for a pushed sandbox branch", async () => {
     vi.stubGlobal(
       "fetch",

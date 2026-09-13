@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { githubAuthConfig } from "@/lib/auth/config";
 import { saveGitHubConnection } from "@/lib/auth/github-connection";
+import { publicOrigin } from "@/lib/auth/public-origin";
 import { fetchGitHubViewer } from "@/lib/github/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -9,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function redirectWithError(error: string, request: Request) {
-  const url = new URL("/auth", request.url);
+  const url = new URL("/auth", publicOrigin(request));
   url.searchParams.set("error", error);
   return NextResponse.redirect(url);
 }
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
         email: viewer.email,
       },
     });
-    return NextResponse.redirect(new URL("/setup", request.url));
+    return NextResponse.redirect(new URL("/setup", publicOrigin(request)));
   } catch {
     return redirectWithError("github_exchange_failed", request);
   }
