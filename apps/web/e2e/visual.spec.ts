@@ -101,7 +101,7 @@ for (const [name, route, marker] of routes) {
 
     const size = testInfo.project.name.startsWith("mobile") ? "390x844" : "1548x1052";
     await page.screenshot({
-      path: path.resolve(process.cwd(), "../../artifacts/interface", `${name}-${size}.png`),
+      path: path.resolve(process.cwd(), "../../.context/interface", `${name}-${size}.png`),
       fullPage: false,
     });
   });

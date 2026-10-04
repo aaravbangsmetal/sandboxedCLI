@@ -9,6 +9,7 @@ import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function parseCloneRequest(body: unknown) {
   if (!body || typeof body !== "object") throw new SyntaxError("Clone requests require a JSON body.");
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
-    assertRateLimit(`${session.account.id}:clone`, 8, 10 * 60_000);
+    await assertRateLimit(session.account.id, "clone", 8, 10 * 60_000);
     const body = parseCloneRequest(await request.json());
     const repository = await fetchGitHubRepository(session.accessToken, body.fullName);
     if (!repository.permissions.pull) {

@@ -5,6 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { createSandboxTerminalTransport } from "@/lib/terminal/create-transport";
+import { logoutWorkspace } from "@/lib/auth/logout-workspace";
 import type { TerminalTransport } from "@/lib/terminal/transport";
 import { type TerminalConnectionState } from "@/lib/terminal/vercel-transport";
 
@@ -86,29 +87,26 @@ function nextTitle(tabs: readonly StoredTerminalTab[]) {
 export function TerminalWorkspace() {
   const router = useRouter();
   const tabButtons = useRef(new Map<string, HTMLButtonElement>());
+  const logoutPending = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const [paused, setPaused] = useState(false);
   const logout = useCallback(async () => {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
+    setPaused(true);
     try {
+      const { pauseFailed } = await logoutWorkspace();
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem("sandboxedcli.active-repository.v1");
-      const pause = fetch("/api/sandbox/pause", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
-      const session = fetch("/api/auth/session", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
-      const [pauseResult] = await Promise.allSettled([pause, session]);
-      const pauseFailed =
-        pauseResult.status === "rejected" ||
-        (pauseResult.status === "fulfilled" && !pauseResult.value.ok);
       router.replace(pauseFailed ? "/auth?notice=workspace_pause_failed" : "/auth");
-    } catch {
-      router.replace("/auth");
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Sign out failed. Try again.");
+    } finally {
+      logoutPending.current = false;
+      setLoggingOut(false);
     }
   }, [router]);
   const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
@@ -126,12 +124,13 @@ export function TerminalWorkspace() {
     (tab: StoredTerminalTab): TerminalTab => ({ ...tab, transport: createTransport(tab.id) }),
     [createTransport],
   );
-  const [tabs, setTabs] = useState<TerminalTab[]>(() => [materialize(DEFAULT_TAB)]);
+  const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeId, setActiveId] = useState<string>(DEFAULT_TAB.id);
   const [activatedIds, setActivatedIds] = useState<Set<string>>(() => new Set([DEFAULT_TAB.id]));
   const [hydrated, setHydrated] = useState(false);
 
   const refreshTransports = useCallback(() => {
+    setPaused(false);
     setTabs((current) =>
       current.map((tab) => {
         tab.transport.dispose();
@@ -159,34 +158,35 @@ export function TerminalWorkspace() {
   );
 
   const pauseTransports = useCallback(() => {
+    setPaused(true);
     tabs.forEach((tab) => tab.transport.dispose());
   }, [tabs]);
 
   const destroyWorkspace = useCallback(() => {
     tabs.forEach((tab) => tab.transport.dispose());
-    router.replace("/auth");
+    sessionStorage.removeItem("sandboxedcli.active-repository.v1");
+    router.replace("/");
   }, [router, tabs]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      let saved: StoredWorkspace | null = null;
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as unknown;
-        if (isStoredWorkspace(saved)) {
-          const nextActive = saved.tabs.some((tab) => tab.id === saved.activeId)
-            ? saved.activeId
-            : saved.tabs[0].id;
-          setTabs((current) => {
-            current.forEach((tab) => tab.transport.dispose());
-            return saved.tabs.map(materialize);
-          });
-          setActiveId(nextActive);
-          setActivatedIds(new Set([nextActive]));
-        }
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as unknown;
+        if (isStoredWorkspace(parsed)) saved = parsed;
       } catch {
         localStorage.removeItem(STORAGE_KEY);
-      } finally {
-        setHydrated(true);
       }
+      const nextTabs = saved?.tabs ?? [DEFAULT_TAB];
+      const nextActive = nextTabs.some((tab) => tab.id === saved?.activeId)
+        ? saved!.activeId : nextTabs[0].id;
+      setTabs((current) => {
+        current.forEach((tab) => tab.transport.dispose());
+        return nextTabs.map(materialize);
+      });
+      setActiveId(nextActive);
+      setActivatedIds(new Set([nextActive]));
+      setHydrated(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [materialize]);
@@ -360,7 +360,7 @@ export function TerminalWorkspace() {
             className={styles.newTab}
             type="button"
             aria-keyshortcuts="Meta+Shift+T Control+Shift+T"
-            disabled={tabs.length >= MAX_TERMINALS}
+            disabled={!hydrated || tabs.length >= MAX_TERMINALS}
             onClick={() => addTab()}
           >
             &gt;_new
@@ -384,7 +384,7 @@ export function TerminalWorkspace() {
                 &gt;_reconnect
               </button>
             ) : null}
-            {activatedIds.has(tab.id) ? (
+            {!paused && activatedIds.has(tab.id) ? (
               <XtermPane
                 transport={tab.transport}
                 label={`${tab.title} interactive cloud terminal`}
@@ -405,9 +405,10 @@ export function TerminalWorkspace() {
         <footer className={styles.footer}>
           <span>$_X;</span>
           <a href="mailto:issues@sandboxedcli.xyz">@_issues@sandboxedcli.xyz</a>
-          <button type="button" aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={() => addTab()}>⌘⇧T new terminal</button>
+          <button type="button" disabled={!hydrated || tabs.length >= MAX_TERMINALS} aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={() => addTab()}>⌘⇧T new terminal</button>
           <span>© 2026 <span className={styles.dark}>sandboxedcli.xyz</span></span>
-          <button className={styles.logout} type="button" onClick={logout}>$_logout →</button>
+          {logoutError ? <span role="alert">{logoutError}</span> : null}
+          <button className={styles.logout} type="button" disabled={loggingOut} onClick={() => void logout()}>$_logout →</button>
         </footer>
       </section>
     </main>

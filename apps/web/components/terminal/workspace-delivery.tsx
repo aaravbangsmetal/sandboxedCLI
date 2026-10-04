@@ -38,7 +38,9 @@ function hasChanges(status: SandboxGitStatus | null) {
   if (!status?.output.trim()) return false;
   return status.output
     .split("\n")
-    .some((line) => line.trim().length > 0 && !line.startsWith("##"));
+    .some((line) => line.startsWith("##")
+      ? /\[ahead [1-9]\d*(?:,|\])/.test(line)
+      : line.trim().length > 0);
 }
 
 const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/;
@@ -98,6 +100,7 @@ export function WorkspaceDelivery() {
       });
       const payload = (await response.json().catch(() => null)) as PullRequestResponse | null;
       if (payload?.pushed && !payload.pullRequest) {
+        setBranch(payload.pushed.branch);
         setMessage(
           `${payload.error || "Pull request was not opened."} Branch ${payload.pushed.branch} is on GitHub.`,
         );

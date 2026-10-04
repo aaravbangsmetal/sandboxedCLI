@@ -7,12 +7,13 @@ import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const identity = await getOrCreateWorkspaceIdentity();
-    assertRateLimit(`${identity.id}:pause`, 20, 10 * 60_000);
+    await assertRateLimit(identity.userId, "pause", 20, 10 * 60_000);
     const result = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().pause(identity.sandboxName),
     );

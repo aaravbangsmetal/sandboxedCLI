@@ -9,6 +9,7 @@
     "typecheck": "pnpm --filter web typecheck",
     "test": "pnpm --filter web test",
     "test:e2e": "pnpm --filter web test:e2e",
+    "test:deployment": "node --test scripts/setup-vercel-production.test.mjs",
     "env:validate": "node environments/agent/scripts/validate-lock.mjs",
     "env:verify": "environments/agent/scripts/verify-image.sh"
   }

@@ -74,6 +74,7 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
       setBusy(action);
       setFailedAction(null);
       setMessage(`${action === "resume" ? "starting" : action === "destroy" ? "deleting" : action === "pause" ? "pausing" : "extending"} workspace`);
+      if (action === "pause" || action === "destroy") onPause();
 
       try {
         const endpoint = action === "resume" || action === "destroy" ? "/api/sandbox" : `/api/sandbox/${action}`;
@@ -92,7 +93,6 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
         }
         if (body?.sandbox) {
           setStatus(body.sandbox);
-          if (action === "pause" && body.sandbox.state !== "running") onPause();
           if (action === "resume" && body.sandbox.state === "running") onResume();
         }
         setMessage(
@@ -105,6 +105,15 @@ export function SandboxControls({ onPause, onResume, onDestroy }: SandboxControl
                 : body?.sandbox?.state ?? "workspace state updated",
         );
       } catch (error) {
+        if (action === "pause" || action === "destroy") {
+          try {
+            const latest = await responseBody(await fetch("/api/sandbox", { cache: "no-store" }));
+            setStatus(latest?.sandbox ?? null);
+            if (latest?.sandbox?.state === "running") onResume();
+          } catch {
+            setStatus(null);
+          }
+        }
         setFailedAction(action);
         setMessage(error instanceof Error ? error.message : "request failed");
       } finally {

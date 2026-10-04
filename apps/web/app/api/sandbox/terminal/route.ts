@@ -9,6 +9,7 @@ import { validateTerminalId } from "@/lib/sandbox/terminal-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function terminalSize(value: unknown, fallback: number, min: number, max: number) {
   return typeof value === "number" && Number.isInteger(value)
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { terminalId?: unknown; cols?: unknown; rows?: unknown };
     const terminalId = validateTerminalId(typeof body.terminalId === "string" ? body.terminalId : "");
     const session = await requireGitHubSession();
-    assertRateLimit(`${session.account.id}:terminal`, 30, 10 * 60_000);
+    await assertRateLimit(session.account.id, "terminal", 30, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
     const connection = await withSandboxMutationLock(identity.userId, () =>
       getSandboxRuntime().openTerminal(

@@ -27,6 +27,8 @@ import {
   SensitiveWorkspaceFilesError,
 } from "./errors";
 import { tmuxSessionName } from "./terminal-id";
+import { GIT_DIFF_SCRIPT } from "./git-diff";
+import { GIT_DELIVERY_SCRIPT, SENSITIVE_FILES_SCRIPT } from "./git-delivery";
 
 const BASH_RC = `# Managed by sandboxed/cli
 if [ -f /etc/profile.d/sandboxed-cli.sh ]; then
@@ -126,8 +128,12 @@ function repositoryDirectory(fullName: string) {
 }
 
 function assertSafeBranch(branch: string) {
-  if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
-    throw new Error("Branch names may only contain safe Git ref characters.");
+  if (
+    !BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.includes("//") ||
+    branch.endsWith("/") || branch.endsWith(".") ||
+    branch.split("/").some((part) => part.startsWith(".") || part.endsWith(".lock"))
+  ) {
+    throw new SyntaxError("Branch names may only contain safe Git ref characters.");
   }
 }
 
@@ -196,6 +202,11 @@ async function ensureWorkspaceFiles(sandbox: Sandbox) {
       mode: 0o700,
     },
   ]);
+  const credentials = await sandbox.runCommand("git", [
+    "config", "--global", "credential.helper",
+    `${sandboxConfig.stateDirectory}/bin/git-credential-sandboxedcli`,
+  ]);
+  if (credentials.exitCode !== 0) throw new Error(await credentials.stderr());
 }
 
 function toStatus(sandbox: Sandbox): SandboxStatus {
@@ -237,6 +248,14 @@ async function getSandbox(name: string, resume = false) {
     if (isNotFound(error)) throw new SandboxNotFoundError(name);
     throw error;
   }
+}
+
+async function getRunningSandbox(name: string) {
+  const sandbox = await getSandbox(name);
+  if (sandbox.status !== "running") {
+    throw new RepositoryWorkspaceError("Start the workspace before reviewing repository changes.");
+  }
+  return sandbox;
 }
 
 export class VercelSandboxRuntime implements SandboxRuntime {
@@ -326,7 +345,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     const directory = repositoryDirectory(repository.fullName);
     const email = user.email || `${user.login}@users.noreply.github.com`;
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
@@ -378,16 +397,16 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   }
 
   async gitStatus(name: string): Promise<SandboxGitStatus> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
+          'test -d "$repo/.git" || exit 18',
           'printf "%s\n" "$repo"',
           'git -C "$repo" status --short --branch',
         ].join("\n"),
@@ -400,49 +419,41 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   }
 
   async gitDiff(name: string): Promise<SandboxGitDiff> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
-          'printf "%s\n" "$repo"',
-          'git -C "$repo" diff --stat HEAD',
-          'git -C "$repo" diff --no-ext-diff --color=never HEAD | head -c 120000',
-          'untracked="$(git -C "$repo" ls-files --others --exclude-standard)"',
-          'if [ -n "$untracked" ]; then printf "\\n-- untracked --\\n%s\\n" "$untracked"; fi',
+          'test -d "$repo/.git" || exit 18',
+          'python3 -c "$1" "$repo"',
         ].join("\n"),
+        "git-diff",
+        GIT_DIFF_SCRIPT,
       ],
       cwd: sandboxConfig.cwd,
       timeoutMs: 30_000,
     });
     if (result.exitCode === 18) throw new RepositoryWorkspaceError();
-    const output = await commandStdoutOrThrow(result, "Git diff failed.");
-    const parsed = splitRepositoryCommandOutput(output);
-    return {
-      repositoryDirectory: parsed.repositoryDirectory,
-      output: parsed.output,
-      truncated: parsed.output.length >= 120000,
-    };
+    return JSON.parse(await commandStdoutOrThrow(result, "Git diff failed.")) as SandboxGitDiff;
   }
 
   async readActiveRepository(name: string): Promise<SandboxActiveRepository> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
           'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
+          'test -d "$repo/.git" || exit 18',
           'printf "%s\n%s\n%s\n" "$repo" "$full_name" "$base_branch"',
         ].join("\n"),
       ],
@@ -473,40 +484,24 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     }
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
-        [
-          'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
-          'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
-          'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
-          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
-          '[ "$full_name" = "$3" ] || exit 18',
-          '[ "$repo" = "$4" ] || exit 18',
-          'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
-          'previous="$(git -C "$repo" symbolic-ref --short HEAD 2>/dev/null || git -C "$repo" rev-parse HEAD)"',
-          'git -C "$repo" checkout -B "$1"',
-          'git -C "$repo" add -A',
-          'if git -C "$repo" diff --cached --name-only | grep -Ei \'(^|/)\\.env($|\\.|rc$)|(^|/)\\.(netrc|npmrc|pypirc|git-credentials)$|(^|/)id_(rsa|dsa|ed25519|ecdsa)($|\\.)|\\.(pem|p12|pfx|key)$|(^|/)credentials\\.json$|(^|/)service-account.*\\.json$|(^|/)\\.docker/config\\.json$|(^|/)\\.kube/config$|(^|/)\\.aws/|(^|/)config/gcloud/\' >/dev/null; then git -C "$repo" reset >/dev/null; git -C "$repo" checkout "$previous" >/dev/null; exit 20; fi',
-          'if git -C "$repo" diff --cached --quiet; then git -C "$repo" checkout "$previous" >/dev/null; exit 19; fi',
-          'git -C "$repo" commit -m "$2"',
-          'if ! git -C "$repo" push origin "HEAD:$1"; then git -C "$repo" checkout "$previous" >/dev/null; exit 1; fi',
-          'commit_sha="$(git -C "$repo" rev-parse HEAD)"',
-          'printf "%s\n%s\n%s\n%s\n" "$3" "$1" "$5" "$commit_sha"',
-        ].join("\n"),
+        GIT_DELIVERY_SCRIPT,
         "commit-and-push",
         input.branch,
         input.message,
         input.fullName,
         repositoryDirectory(input.fullName),
         input.defaultBranch,
+        SENSITIVE_FILES_SCRIPT,
       ],
       cwd: sandboxConfig.cwd,
       env: { GITHUB_TOKEN: accessToken },
       timeoutMs: 120_000,
     });
+    if (result.exitCode === 21) throw new DirtyRepositoryError();
+    if (result.exitCode === 22) throw new RepositoryWorkspaceError("The delivery branch already contains other commits. Choose a new branch name.");
     if (result.exitCode === 18) throw new RepositoryWorkspaceError();
     if (result.exitCode === 19) throw new NoRepositoryChangesError();
     if (result.exitCode === 20) throw new SensitiveWorkspaceFilesError();
@@ -522,19 +517,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     githubAccessToken: string,
   ): Promise<TerminalConnection> {
     void githubAccessToken;
-    const sandbox = await Sandbox.getOrCreate({
-      name,
-      image: sandboxConfig.image,
-      persistent: true,
-      timeout: sandboxConfig.timeoutMs,
-      resources: { vcpus: sandboxConfig.vcpus },
-      snapshotExpiration: sandboxConfig.snapshotExpirationMs,
-      keepLastSnapshots: { count: sandboxConfig.keepSnapshots, deleteEvicted: true },
-      tags: { product: "sandboxed-cli", phase: "sandbox" },
-      resume: true,
-      onCreate: ensureWorkspaceFiles,
-      onResume: ensureWorkspaceFiles,
-    });
+    const sandbox = await getRunningSandbox(name);
     const safeTerminalId = tmuxSessionName(terminalId);
     const terminal = await sandbox.runCommand({
       cmd: "tmux",
