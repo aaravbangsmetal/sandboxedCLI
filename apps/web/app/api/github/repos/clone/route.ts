@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
-    assertRateLimit(`${session.account.id}:clone`, 8, 10 * 60_000);
+    await assertRateLimit(session.account.id, "clone", 8, 10 * 60_000);
     const body = parseCloneRequest(await request.json());
     const repository = await fetchGitHubRepository(session.accessToken, body.fullName);
     if (!repository.permissions.pull) {

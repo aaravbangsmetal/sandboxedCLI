@@ -41,6 +41,8 @@ Leave `NEXT_PUBLIC_SANDBOX_TRANSPORT` unset in production. The value `mock` disa
 5. In Supabase Authentication → URL Configuration, set the production Site URL and add `https://<production-domain>/api/auth/github/callback` to Redirect URLs. Add `http://localhost:3000/api/auth/github/callback` for local development.
 6. Apply every SQL file in `supabase/migrations/` to the production project before deploying.
 
+Migration `0004_sandbox_rate_limits.sql` adds the service-role-only sliding-window quota function. Apply it before deploying the matching app version: production mutations fail closed if the quota store is unavailable. Development and unit tests use a local quota store.
+
 ## Custom sandbox image
 
 The custom image contains Git, Git LFS, GitHub CLI, tmux, Node.js, pnpm, Python, Codex CLI, Claude Code, and OpenCode. Publish the image after merging changes that touch `environments/agent/`:

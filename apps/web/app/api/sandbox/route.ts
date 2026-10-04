@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   try {
     assertSafeMutationRequest(request);
     const identity = await getOrCreateWorkspaceIdentity();
-    assertRateLimit(`${identity.id}:start`, 20, 10 * 60_000);
+    await assertRateLimit(identity.userId, "start", 20, 10 * 60_000);
     const sandbox = await withSandboxMutationLock(identity.userId, async () => {
       const status = await getSandboxRuntime().ensureRunning(identity.sandboxName);
       await markSandboxFirstStarted(identity.userId);
@@ -59,7 +59,7 @@ export async function DELETE(request: Request) {
       );
     }
     const identity = await getOrCreateWorkspaceIdentity();
-    assertRateLimit(`${identity.id}:destroy`, 8, 10 * 60_000);
+    await assertRateLimit(identity.userId, "destroy", 8, 10 * 60_000);
     await withSandboxMutationLock(identity.userId, async () => {
       await getSandboxRuntime().destroy(identity.sandboxName);
       await clearSandboxFirstStarted(identity.userId);

@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     assertSafeMutationRequest(request);
     const session = await requireGitHubSession();
     const input = parsePullRequestRequest(await request.json());
-    assertRateLimit(`${session.account.id}:pr`, 8, 10 * 60_000);
+    await assertRateLimit(session.account.id, "pr", 8, 10 * 60_000);
     const identity = await getOrCreateWorkspaceIdentity();
     const sandboxRuntime = getSandboxRuntime();
     const pushed = await withSandboxMutationLock(identity.userId, async () => {
