@@ -173,7 +173,7 @@ describe("VercelSandboxRuntime", () => {
 
     expect(sandbox.runCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        cmd: "sh",
+        cmd: "bash",
         env: { GITHUB_TOKEN: "gho_token" },
         cwd: "/vercel/sandbox",
       }),
@@ -255,6 +255,13 @@ describe("VercelSandboxRuntime", () => {
     expect(sdk.getOrCreate).not.toHaveBeenCalled();
   });
 
+  it.each(["feature//name", "feature/", "feature/.hidden", "feature/name.lock/more", "feature/name."])("rejects invalid Git refs: %s", async (branch) => {
+    await expect(new VercelSandboxRuntime().commitAndPushActiveRepository("sandboxed-cli-test", "token", {
+      branch, message: "Update", fullName: "octocat/hello-world", defaultBranch: "main",
+    })).rejects.toThrow(SyntaxError);
+    expect(sdk.get).not.toHaveBeenCalled();
+  });
+
   it("reads git status from the active sandbox repository", async () => {
     const sandbox = fakeSandbox();
     sandbox.runCommand.mockResolvedValueOnce({
@@ -328,7 +335,7 @@ describe("VercelSandboxRuntime", () => {
 
     expect(sandbox.runCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        cmd: "sh",
+        cmd: "bash",
         env: { GITHUB_TOKEN: "gho_token" },
         cwd: "/vercel/sandbox",
       }),
@@ -336,7 +343,7 @@ describe("VercelSandboxRuntime", () => {
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
     expect(command.args.join(" ")).toContain("push origin");
     expect(command.args.join(" ")).toContain("npmrc");
-    expect(command.args.join(" ")).toContain('checkout "$previous"');
+    expect(command.args.join(" ")).toContain("checkout -b");
     expect(command.args.join(" ")).not.toContain("gho_token");
     expect(command.args.join(" ")).not.toContain("extraheader");
   });

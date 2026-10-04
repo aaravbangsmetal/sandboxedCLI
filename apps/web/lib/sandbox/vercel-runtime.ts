@@ -28,6 +28,7 @@ import {
 } from "./errors";
 import { tmuxSessionName } from "./terminal-id";
 import { GIT_DIFF_SCRIPT } from "./git-diff";
+import { GIT_DELIVERY_SCRIPT, SENSITIVE_FILES_SCRIPT } from "./git-delivery";
 
 const BASH_RC = `# Managed by sandboxed/cli
 if [ -f /etc/profile.d/sandboxed-cli.sh ]; then
@@ -127,8 +128,12 @@ function repositoryDirectory(fullName: string) {
 }
 
 function assertSafeBranch(branch: string) {
-  if (!BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.endsWith(".lock")) {
-    throw new Error("Branch names may only contain safe Git ref characters.");
+  if (
+    !BRANCH_PATTERN.test(branch) || branch.includes("..") || branch.includes("//") ||
+    branch.endsWith("/") || branch.endsWith(".") ||
+    branch.split("/").some((part) => part.startsWith(".") || part.endsWith(".lock"))
+  ) {
+    throw new SyntaxError("Branch names may only contain safe Git ref characters.");
   }
 }
 
@@ -327,7 +332,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     const directory = repositoryDirectory(repository.fullName);
     const email = user.email || `${user.login}@users.noreply.github.com`;
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
@@ -381,7 +386,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   async gitStatus(name: string): Promise<SandboxGitStatus> {
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
@@ -403,7 +408,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   async gitDiff(name: string): Promise<SandboxGitDiff> {
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
@@ -426,7 +431,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   async readActiveRepository(name: string): Promise<SandboxActiveRepository> {
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
         [
@@ -466,40 +471,24 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     }
     const sandbox = await getSandbox(name, true);
     const result = await sandbox.runCommand({
-      cmd: "sh",
+      cmd: "bash",
       args: [
         "-lc",
-        [
-          'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
-          'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
-          'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
-          'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git" || exit 18',
-          '[ "$full_name" = "$3" ] || exit 18',
-          '[ "$repo" = "$4" ] || exit 18',
-          'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
-          'previous="$(git -C "$repo" symbolic-ref --short HEAD 2>/dev/null || git -C "$repo" rev-parse HEAD)"',
-          'git -C "$repo" checkout -B "$1"',
-          'git -C "$repo" add -A',
-          'if git -C "$repo" diff --cached --name-only | grep -Ei \'(^|/)\\.env($|\\.|rc$)|(^|/)\\.(netrc|npmrc|pypirc|git-credentials)$|(^|/)id_(rsa|dsa|ed25519|ecdsa)($|\\.)|\\.(pem|p12|pfx|key)$|(^|/)credentials\\.json$|(^|/)service-account.*\\.json$|(^|/)\\.docker/config\\.json$|(^|/)\\.kube/config$|(^|/)\\.aws/|(^|/)config/gcloud/\' >/dev/null; then git -C "$repo" reset >/dev/null; git -C "$repo" checkout "$previous" >/dev/null; exit 20; fi',
-          'if git -C "$repo" diff --cached --quiet; then git -C "$repo" checkout "$previous" >/dev/null; exit 19; fi',
-          'git -C "$repo" commit -m "$2"',
-          'if ! git -C "$repo" push origin "HEAD:$1"; then git -C "$repo" checkout "$previous" >/dev/null; exit 1; fi',
-          'commit_sha="$(git -C "$repo" rev-parse HEAD)"',
-          'printf "%s\n%s\n%s\n%s\n" "$3" "$1" "$5" "$commit_sha"',
-        ].join("\n"),
+        GIT_DELIVERY_SCRIPT,
         "commit-and-push",
         input.branch,
         input.message,
         input.fullName,
         repositoryDirectory(input.fullName),
         input.defaultBranch,
+        SENSITIVE_FILES_SCRIPT,
       ],
       cwd: sandboxConfig.cwd,
       env: { GITHUB_TOKEN: accessToken },
       timeoutMs: 120_000,
     });
+    if (result.exitCode === 21) throw new DirtyRepositoryError();
+    if (result.exitCode === 22) throw new RepositoryWorkspaceError("The delivery branch already contains other commits. Choose a new branch name.");
     if (result.exitCode === 18) throw new RepositoryWorkspaceError();
     if (result.exitCode === 19) throw new NoRepositoryChangesError();
     if (result.exitCode === 20) throw new SensitiveWorkspaceFilesError();
