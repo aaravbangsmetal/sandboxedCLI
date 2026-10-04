@@ -9,6 +9,7 @@ import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function parseCloneRequest(body: unknown) {
   if (!body || typeof body !== "object") throw new SyntaxError("Clone requests require a JSON body.");

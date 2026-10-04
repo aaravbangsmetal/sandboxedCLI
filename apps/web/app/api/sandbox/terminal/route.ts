@@ -9,6 +9,7 @@ import { validateTerminalId } from "@/lib/sandbox/terminal-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function terminalSize(value: unknown, fallback: number, min: number, max: number) {
   return typeof value === "number" && Number.isInteger(value)

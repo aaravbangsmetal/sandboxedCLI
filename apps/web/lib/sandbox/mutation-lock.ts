@@ -7,19 +7,30 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { SandboxBusyError } from "./errors";
 
 const pendingMutations = new Map<string, Promise<void>>();
+// Mutation routes are capped at 300 seconds. Keep ownership beyond that bound,
+// including the 120-second Git commands, even if the request is terminated.
+const LOCK_TTL_MS = 10 * 60_000;
 
 async function acquireDatabaseLock(userId: string) {
   const holder = randomUUID();
   const supabase = createSupabaseAdminClient();
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
-    await supabase.from("sandbox_mutation_locks").delete().lt("expires_at", new Date().toISOString());
+    const { error: cleanupError } = await supabase
+      .from("sandbox_mutation_locks")
+      .delete()
+      .eq("user_id", userId)
+      .lt("expires_at", new Date().toISOString());
+    if (cleanupError) throw new Error("Unable to acquire sandbox mutation lock.", { cause: cleanupError });
     const { error } = await supabase.from("sandbox_mutation_locks").insert({
       user_id: userId,
       holder,
-      expires_at: new Date(Date.now() + 45_000).toISOString(),
+      expires_at: new Date(Date.now() + LOCK_TTL_MS).toISOString(),
     });
     if (!error) return holder;
+    if (error.code !== "23505") {
+      throw new Error("Unable to acquire sandbox mutation lock.", { cause: error });
+    }
     await new Promise((resolve) => setTimeout(resolve, 75));
   }
   throw new SandboxBusyError();

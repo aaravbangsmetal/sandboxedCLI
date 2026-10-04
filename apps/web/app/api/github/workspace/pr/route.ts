@@ -10,6 +10,7 @@ import { getSandboxRuntime } from "@/lib/sandbox/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function slugSuffix() {
   return crypto.randomUUID().replaceAll("-", "").slice(0, 8);
