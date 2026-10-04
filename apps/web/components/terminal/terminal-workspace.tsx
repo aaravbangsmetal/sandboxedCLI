@@ -5,6 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { createSandboxTerminalTransport } from "@/lib/terminal/create-transport";
+import { logoutWorkspace } from "@/lib/auth/logout-workspace";
 import type { TerminalTransport } from "@/lib/terminal/transport";
 import { type TerminalConnectionState } from "@/lib/terminal/vercel-transport";
 
@@ -86,29 +87,24 @@ function nextTitle(tabs: readonly StoredTerminalTab[]) {
 export function TerminalWorkspace() {
   const router = useRouter();
   const tabButtons = useRef(new Map<string, HTMLButtonElement>());
+  const logoutPending = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const logout = useCallback(async () => {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
     try {
+      const { pauseFailed } = await logoutWorkspace();
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem("sandboxedcli.active-repository.v1");
-      const pause = fetch("/api/sandbox/pause", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
-      const session = fetch("/api/auth/session", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        keepalive: true,
-      });
-      const [pauseResult] = await Promise.allSettled([pause, session]);
-      const pauseFailed =
-        pauseResult.status === "rejected" ||
-        (pauseResult.status === "fulfilled" && !pauseResult.value.ok);
       router.replace(pauseFailed ? "/auth?notice=workspace_pause_failed" : "/auth");
-    } catch {
-      router.replace("/auth");
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Sign out failed. Try again.");
+    } finally {
+      logoutPending.current = false;
+      setLoggingOut(false);
     }
   }, [router]);
   const [connectionStates, setConnectionStates] = useState<Record<string, TerminalConnectionState>>({});
@@ -407,7 +403,8 @@ export function TerminalWorkspace() {
           <a href="mailto:issues@sandboxedcli.xyz">@_issues@sandboxedcli.xyz</a>
           <button type="button" aria-keyshortcuts="Meta+Shift+T Control+Shift+T" onClick={() => addTab()}>⌘⇧T new terminal</button>
           <span>© 2026 <span className={styles.dark}>sandboxedcli.xyz</span></span>
-          <button className={styles.logout} type="button" onClick={logout}>$_logout →</button>
+          {logoutError ? <span role="alert">{logoutError}</span> : null}
+          <button className={styles.logout} type="button" disabled={loggingOut} onClick={() => void logout()}>$_logout →</button>
         </footer>
       </section>
     </main>

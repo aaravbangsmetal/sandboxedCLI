@@ -237,7 +237,7 @@ test("creates a terminal with keyboard or touch controls and logs out", async ({
     }
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ authenticated: true, user: { login: "octocat" }, scope: "repo" }),
+      body: JSON.stringify({ authenticated: !sessionCleared, user: sessionCleared ? null : { login: "octocat" }, scope: "repo" }),
     });
   });
 
@@ -249,7 +249,7 @@ test("creates a terminal with keyboard or touch controls and logs out", async ({
   }
   await expect(page.getByRole("tab")).toHaveCount(2);
   await page.getByRole("button", { name: "$_logout →" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/auth$/);
   await expect.poll(() => sessionCleared).toBe(true);
 });
 
