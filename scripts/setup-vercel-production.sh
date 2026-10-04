@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Configure production environment variables for the sandboxedcli Vercel project.
-# Run after `vercel login` and `vercel link` from the repository root.
+# Run after `vercel login`. Configure the project's Root Directory as apps/web.
 #
 # Required secrets (export before running, or pass inline):
 #   NEXT_PUBLIC_SUPABASE_URL
@@ -10,14 +10,14 @@ set -euo pipefail
 #   SUPABASE_SERVICE_ROLE_KEY
 #   GITHUB_TOKEN_ENCRYPTION_KEY
 #   SANDBOX_SESSION_SECRET
+#   SANDBOX_IMAGE (a ready custom agent image tag)
 #
 # Optional overrides:
 #   NEXT_PUBLIC_SITE_URL (default: https://sandboxedcli.xyz)
-#   SANDBOX_IMAGE (default: vercel/sandbox/universal:latest)
 #   VERCEL_SCOPE (team slug, e.g. surfersbot-first)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
+cd "$ROOT/apps/web"
 
 require() {
   local name="$1"
@@ -32,19 +32,26 @@ require NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 require SUPABASE_SERVICE_ROLE_KEY
 require GITHUB_TOKEN_ENCRYPTION_KEY
 require SANDBOX_SESSION_SECRET
+require SANDBOX_IMAGE
 
 SITE_URL="${NEXT_PUBLIC_SITE_URL:-https://sandboxedcli.xyz}"
-SANDBOX_IMAGE_VALUE="${SANDBOX_IMAGE:-vercel/sandbox/universal:latest}"
-SCOPE_ARGS=()
-if [[ -n "${VERCEL_SCOPE:-}" ]]; then
-  SCOPE_ARGS=(--scope "$VERCEL_SCOPE")
+SANDBOX_IMAGE_VALUE="$SANDBOX_IMAGE"
+run_vercel() {
+  if [[ -n "${VERCEL_SCOPE:-}" ]]; then
+    vercel "$@" --scope "$VERCEL_SCOPE"
+  else
+    vercel "$@"
+  fi
+}
+
+if [[ ! -f .vercel/project.json ]]; then
+  run_vercel link --yes
 fi
 
 add_env() {
   local name="$1"
   local value="$2"
-  printf '%s' "$value" | vercel env add "$name" production "${SCOPE_ARGS[@]}" --force
-  printf '%s' "$value" | vercel env add "$name" preview "${SCOPE_ARGS[@]}" --force
+  printf '%s' "$value" | run_vercel env add "$name" production --force
 }
 
 echo "Setting production environment variables..."
@@ -63,12 +70,7 @@ add_env SANDBOX_VCPUS "2"
 add_env SANDBOX_SNAPSHOT_EXPIRATION_MS "2592000000"
 add_env SANDBOX_KEEP_SNAPSHOTS "1"
 
-echo "Linking project (monorepo root) if needed..."
-if [[ ! -f .vercel/project.json ]]; then
-  vercel link --yes "${SCOPE_ARGS[@]}"
-fi
-
 echo "Deploying to production..."
-vercel deploy --prod --yes "${SCOPE_ARGS[@]}"
+run_vercel deploy --prod --yes
 
 echo "Done. Add $SITE_URL as a production domain in Vercel if it is not already assigned."

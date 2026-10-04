@@ -10,3 +10,6 @@ artifacts/
 .env
 .env.*
 !.env.example
+.context/
+.vercel/
+.deploy-args*.json

@@ -11,7 +11,9 @@
 | `SANDBOX_SESSION_SECRET` | A different random 32-byte-or-longer secret | Generate once with `openssl rand -base64 32`. Do not rotate in production: sandbox names are derived from this value, and a new secret orphans running workspaces. |
 | `SANDBOX_IMAGE` | Ready Vercel Container Registry tag | Output of `environments/agent/scripts/publish-vcr.sh` after the image build is ready |
 
-Do not expose `SUPABASE_SERVICE_ROLE_KEY`, `GITHUB_TOKEN_ENCRYPTION_KEY`, or `SANDBOX_SESSION_SECRET` with a `NEXT_PUBLIC_` prefix.
+Do not expose `SUPABASE_SERVICE_ROLE_KEY`, `GITHUB_TOKEN_ENCRYPTION_KEY`, or `SANDBOX_SESSION_SECRET` with a `NEXT_PUBLIC_` prefix. Deployment argument dumps and `.vercel/` are local artifacts and must never be committed. Removing an exposed artifact does not revoke its credentials: rotate the service-role key, and migrate encrypted tokens and sandbox identities before changing their respective secrets. History cleanup must be coordinated separately.
+
+Set the Vercel project's Root Directory to `apps/web` in Project Settings. The app's `vercel.json` configures the build; Root Directory is a project setting, not a supported `vercel.json` property. The production setup script links the app before writing variables, requires the custom `SANDBOX_IMAGE`, and writes only to production. Configure preview credentials and URLs separately to avoid sharing production workspaces and secrets.
 
 Vercel automatically supplies `VERCEL_OIDC_TOKEN` to deployments. Do not manually copy it into production. `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` are only needed for local development or a non-Vercel host.
 
