@@ -288,7 +288,7 @@ describe("VercelSandboxRuntime", () => {
     const sandbox = fakeSandbox();
     sandbox.runCommand.mockResolvedValueOnce({
       exitCode: 0,
-      stdout: async () => "/vercel/sandbox/repos/octocat__hello-world\n README.md | 1 +\n+hello\n",
+      stdout: async () => JSON.stringify({ repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world", output: " README.md | 1 +\n+hello\n", truncated: false }),
       stderr: async () => "",
     });
     sdk.get.mockResolvedValueOnce(sandbox);
@@ -299,7 +299,7 @@ describe("VercelSandboxRuntime", () => {
       truncated: false,
     });
     const [[command]] = sandbox.runCommand.mock.calls as unknown as [[{ args: string[] }]];
-    expect(command.args.join(" ")).toContain("diff --stat HEAD");
+    expect(command.args.join(" ")).toContain('git("diff", "--no-ext-diff", "--no-textconv", "--stat", "HEAD")');
   });
 
   it("commits and pushes active repository changes to a sandbox branch", async () => {

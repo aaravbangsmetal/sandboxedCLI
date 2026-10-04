@@ -27,6 +27,7 @@ import {
   SensitiveWorkspaceFilesError,
 } from "./errors";
 import { tmuxSessionName } from "./terminal-id";
+import { GIT_DIFF_SCRIPT } from "./git-diff";
 
 const BASH_RC = `# Managed by sandboxed/cli
 if [ -f /etc/profile.d/sandboxed-cli.sh ]; then
@@ -385,9 +386,9 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
+          'test -d "$repo/.git" || exit 18',
           'printf "%s\n" "$repo"',
           'git -C "$repo" status --short --branch',
         ].join("\n"),
@@ -407,27 +408,19 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
-          'printf "%s\n" "$repo"',
-          'git -C "$repo" diff --stat HEAD',
-          'git -C "$repo" diff --no-ext-diff --color=never HEAD | head -c 120000',
-          'untracked="$(git -C "$repo" ls-files --others --exclude-standard)"',
-          'if [ -n "$untracked" ]; then printf "\\n-- untracked --\\n%s\\n" "$untracked"; fi',
+          'test -d "$repo/.git" || exit 18',
+          'python3 -c "$1" "$repo"',
         ].join("\n"),
+        "git-diff",
+        GIT_DIFF_SCRIPT,
       ],
       cwd: sandboxConfig.cwd,
       timeoutMs: 30_000,
     });
     if (result.exitCode === 18) throw new RepositoryWorkspaceError();
-    const output = await commandStdoutOrThrow(result, "Git diff failed.");
-    const parsed = splitRepositoryCommandOutput(output);
-    return {
-      repositoryDirectory: parsed.repositoryDirectory,
-      output: parsed.output,
-      truncated: parsed.output.length >= 120000,
-    };
+    return JSON.parse(await commandStdoutOrThrow(result, "Git diff failed.")) as SandboxGitDiff;
   }
 
   async readActiveRepository(name: string): Promise<SandboxActiveRepository> {
@@ -438,11 +431,11 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
           'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
+          'test -d "$repo/.git" || exit 18',
           'printf "%s\n%s\n%s\n" "$repo" "$full_name" "$base_branch"',
         ].join("\n"),
       ],
@@ -478,11 +471,11 @@ export class VercelSandboxRuntime implements SandboxRuntime {
         "-lc",
         [
           'set -euo pipefail',
-          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")"',
+          'repo="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_path")" || exit 18',
           'full_name="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_full_name")"',
           'base_branch="$(cat "/vercel/sandbox/.sandboxedcli/active_repo_default_branch")"',
           'case "$repo" in /vercel/sandbox/repos/*) ;; *) exit 18 ;; esac',
-          'test -d "$repo/.git"',
+          'test -d "$repo/.git" || exit 18',
           '[ "$full_name" = "$3" ] || exit 18',
           '[ "$repo" = "$4" ] || exit 18',
           'if [ -z "$(git -C "$repo" status --porcelain)" ]; then exit 19; fi',
