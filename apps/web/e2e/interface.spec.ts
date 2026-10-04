@@ -242,6 +242,7 @@ test("creates a terminal with keyboard or touch controls and logs out", async ({
   });
 
   await page.goto("/terminal");
+  await expect(page.getByRole("tab")).toHaveCount(1);
   if (testInfo.project.name.startsWith("mobile")) {
     await page.getByRole("button", { name: ">_new" }).click();
   } else {
@@ -264,6 +265,58 @@ test("reviews workspace changes and opens a pull request", async ({ page }) => {
     "href",
     "https://github.com/octocat/hello-world/pull/12",
   );
+});
+
+test("keeps terminals disconnected while paused until the workspace is started", async ({ page }) => {
+  await page.goto("/terminal");
+  await expect(page.locator(".xterm")).toHaveCount(1);
+  await page.getByRole("button", { name: ">_pause", exact: true }).click();
+  await expect(page.locator(".xterm")).toHaveCount(0);
+  await page.getByRole("button", { name: ">_new", exact: true }).click();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.locator(".xterm")).toHaveCount(0);
+  await page.getByRole("button", { name: ">_start", exact: true }).click();
+  await expect(page.locator(".xterm").last()).toBeVisible();
+});
+
+test("reports a logout failure while preserving the local workspace", async ({ page }) => {
+  await page.route("**/api/auth/session", async (route) => {
+    await route.fulfill({
+      status: route.request().method() === "DELETE" ? 500 : 200,
+      contentType: "application/json",
+      body: JSON.stringify({ authenticated: true, user: { login: "octocat" }, error: "Sign out failed" }),
+    });
+  });
+  await page.goto("/terminal");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await page.getByRole("button", { name: "$_logout →" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Sign out failed" })).toHaveText("Sign out failed");
+  await expect(page).toHaveURL(/\/terminal$/);
+  expect(await page.evaluate(() => localStorage.getItem("sandboxedcli.terminals.v1"))).not.toBeNull();
+});
+
+test("offers delivery for commits ahead of the upstream branch", async ({ page }) => {
+  await page.route("**/api/github/workspace", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      status: { repositoryDirectory: "/vercel/sandbox/repos/octocat__hello-world", output: "## main...origin/main [ahead 1]\n" },
+    }) });
+  });
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_review", exact: true }).click();
+  await expect(page.getByRole("button", { name: ">_open pr", exact: true })).toBeEnabled();
+});
+
+test("destroy returns to the landing page without starting a replacement sandbox", async ({ page }) => {
+  let started = 0;
+  page.on("dialog", (dialog) => dialog.accept());
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/sandbox") && request.method() === "POST") started += 1;
+  });
+  await page.goto("/terminal");
+  await page.getByRole("button", { name: ">_destroy", exact: true }).click();
+  await expect(page.getByRole("button", { name: /get started$/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  expect(started).toBe(0);
 });
 
 test("validates an optional delivery branch before opening a pull request", async ({ page }) => {

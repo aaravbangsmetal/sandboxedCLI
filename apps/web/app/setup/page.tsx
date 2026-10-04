@@ -2,6 +2,8 @@ import { requireGitHubPageSession } from "@/lib/auth/require-page-session";
 import { AnimatedOnboarding } from "@/components/onboarding/AnimatedOnboarding";
 import type { SequenceLine } from "@/components/onboarding/TerminalSequence";
 
+export const dynamic = "force-dynamic";
+
 const setupLines: readonly SequenceLine[] = [
   {
     segments: [

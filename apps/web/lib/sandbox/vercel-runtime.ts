@@ -202,6 +202,11 @@ async function ensureWorkspaceFiles(sandbox: Sandbox) {
       mode: 0o700,
     },
   ]);
+  const credentials = await sandbox.runCommand("git", [
+    "config", "--global", "credential.helper",
+    `${sandboxConfig.stateDirectory}/bin/git-credential-sandboxedcli`,
+  ]);
+  if (credentials.exitCode !== 0) throw new Error(await credentials.stderr());
 }
 
 function toStatus(sandbox: Sandbox): SandboxStatus {
@@ -243,6 +248,14 @@ async function getSandbox(name: string, resume = false) {
     if (isNotFound(error)) throw new SandboxNotFoundError(name);
     throw error;
   }
+}
+
+async function getRunningSandbox(name: string) {
+  const sandbox = await getSandbox(name);
+  if (sandbox.status !== "running") {
+    throw new RepositoryWorkspaceError("Start the workspace before reviewing repository changes.");
+  }
+  return sandbox;
 }
 
 export class VercelSandboxRuntime implements SandboxRuntime {
@@ -384,7 +397,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   }
 
   async gitStatus(name: string): Promise<SandboxGitStatus> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
       cmd: "bash",
       args: [
@@ -406,7 +419,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   }
 
   async gitDiff(name: string): Promise<SandboxGitDiff> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
       cmd: "bash",
       args: [
@@ -429,7 +442,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
   }
 
   async readActiveRepository(name: string): Promise<SandboxActiveRepository> {
-    const sandbox = await getSandbox(name, true);
+    const sandbox = await getRunningSandbox(name);
     const result = await sandbox.runCommand({
       cmd: "bash",
       args: [
@@ -504,19 +517,7 @@ export class VercelSandboxRuntime implements SandboxRuntime {
     githubAccessToken: string,
   ): Promise<TerminalConnection> {
     void githubAccessToken;
-    const sandbox = await Sandbox.getOrCreate({
-      name,
-      image: sandboxConfig.image,
-      persistent: true,
-      timeout: sandboxConfig.timeoutMs,
-      resources: { vcpus: sandboxConfig.vcpus },
-      snapshotExpiration: sandboxConfig.snapshotExpirationMs,
-      keepLastSnapshots: { count: sandboxConfig.keepSnapshots, deleteEvicted: true },
-      tags: { product: "sandboxed-cli", phase: "sandbox" },
-      resume: true,
-      onCreate: ensureWorkspaceFiles,
-      onResume: ensureWorkspaceFiles,
-    });
+    const sandbox = await getRunningSandbox(name);
     const safeTerminalId = tmuxSessionName(terminalId);
     const terminal = await sandbox.runCommand({
       cmd: "tmux",

@@ -67,7 +67,7 @@ describe("VercelSandboxRuntime", () => {
 
   it("issues an interactive tmux-backed terminal connection", async () => {
     const sandbox = fakeSandbox();
-    sdk.getOrCreate.mockResolvedValue(sandbox);
+    sdk.get.mockResolvedValueOnce(sandbox);
 
     const connection = await new VercelSandboxRuntime().openTerminal(
       "sandboxed-cli-test",
@@ -94,6 +94,28 @@ describe("VercelSandboxRuntime", () => {
     const firstCall = sandbox.runCommand.mock.calls.at(0)?.at(0) as unknown as { args: string[]; env?: unknown };
     expect(firstCall.env).toBeUndefined();
     expect(firstCall.args.join(" ")).not.toContain("gho_token");
+  });
+
+  it("configures Git credentials before any terminal is opened", async () => {
+    const sandbox = fakeSandbox();
+    sdk.getOrCreate.mockImplementationOnce(async (options: { onCreate: (sandbox: unknown) => Promise<void> }) => {
+      await options.onCreate(sandbox);
+      return sandbox;
+    });
+    await new VercelSandboxRuntime().ensureRunning("sandboxed-cli-test");
+    expect(sandbox.runCommand).toHaveBeenCalledWith("git", [
+      "config", "--global", "credential.helper", "/vercel/sandbox/.sandboxedcli/bin/git-credential-sandboxedcli",
+    ]);
+    expect(sandbox.openInteractive).not.toHaveBeenCalled();
+  });
+
+  it("does not restart a stopped workspace when a terminal reconnects", async () => {
+    const stopped = fakeSandbox("stopped");
+    sdk.get.mockResolvedValueOnce(stopped);
+    await expect(new VercelSandboxRuntime().openTerminal("sandboxed-cli-test", "terminal-one", { cols: 80, rows: 24 }, "token"))
+      .rejects.toThrow("Start the workspace");
+    expect(sdk.getOrCreate).not.toHaveBeenCalled();
+    expect(stopped.openInteractive).not.toHaveBeenCalled();
   });
 
   it("reports sandbox image health from the baked environment command", async () => {
@@ -419,6 +441,14 @@ describe("VercelSandboxRuntime", () => {
       state: "stopped",
     });
     expect(stopped.extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it.each(["gitStatus", "gitDiff", "readActiveRepository"] as const)("does not resume a stopped workspace during %s", async (method) => {
+    const stopped = fakeSandbox("stopped");
+    sdk.get.mockResolvedValueOnce(stopped);
+    await expect(new VercelSandboxRuntime()[method]("sandboxed-cli-test")).rejects.toThrow("Start the workspace");
+    expect(sdk.get).toHaveBeenCalledWith({ name: "sandboxed-cli-test", resume: false });
+    expect(stopped.runCommand).not.toHaveBeenCalled();
   });
 
   it("caps lease extensions from the first start time", async () => {

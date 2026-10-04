@@ -174,6 +174,7 @@ export class VercelTerminalTransport implements TerminalTransport {
       };
       socket.onclose = (event) => {
         if (generation !== this.generation || this.disposed) return;
+        this.generation += 1;
         this.clearConnectionTimer();
         this.socket = null;
         if (event.code === 1000) {

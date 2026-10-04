@@ -25,9 +25,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "NEXT_PUBLIC_SANDBOX_TRANSPORT=mock pnpm exec next dev --hostname 127.0.0.1 --port 3100",
+    command: "SANDBOX_E2E_TEST_MODE=1 NEXT_PUBLIC_SANDBOX_TRANSPORT=mock pnpm exec next dev --hostname 127.0.0.1 --port 3100",
     url: "http://127.0.0.1:3100",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });
