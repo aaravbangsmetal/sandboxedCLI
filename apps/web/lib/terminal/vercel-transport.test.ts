@@ -194,4 +194,79 @@ describe("VercelTerminalTransport", () => {
     await flushPromises();
     transport.dispose();
   });
+
+  it("keeps Unicode characters intact when bytes span WebSocket frames", async () => {
+    const socket = new FakeSocket();
+    const output = vi.fn();
+    const transport = new VercelTerminalTransport("terminal-one", {
+      fetcher: (async () => connectionResponse()) as typeof fetch,
+      websocketFactory: () => socket as unknown as WebSocket,
+    });
+    transport.connect(output);
+    await flushPromises();
+    socket.open();
+    const bytes = new TextEncoder().encode("ह🙂");
+    for (const byte of bytes) {
+      const frame = new window.ArrayBuffer(1);
+      new Uint8Array(frame)[0] = byte;
+      socket.message(frame);
+    }
+    expect(output.mock.calls.map(([value]) => value).join("")).toBe("ह🙂");
+    transport.dispose();
+  });
+
+  it.each([401, 403, 429])("does not retry a terminal request denied with HTTP %s", async (status) => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn(async () => ({ ok: false, status, json: async () => ({ error: "denied" }) }) as Response);
+    const onStateChange = vi.fn();
+    const transport = new VercelTerminalTransport("terminal-one", { fetcher: fetcher as typeof fetch, onStateChange });
+    transport.connect(() => undefined);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(onStateChange).toHaveBeenLastCalledWith("error");
+    transport.dispose();
+  });
+
+  it("can reconnect after disposal while a previous credential request is pending", async () => {
+    let resolveFirst!: (value: Response) => void;
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue(connectionResponse());
+    const sockets: FakeSocket[] = [];
+    const output = vi.fn();
+    const transport = new VercelTerminalTransport("terminal-one", {
+      fetcher: fetcher as typeof fetch,
+      websocketFactory: () => { const socket = new FakeSocket(); sockets.push(socket); return socket as unknown as WebSocket; },
+    });
+    transport.connect(output);
+    const firstSignal = fetcher.mock.calls[0][1].signal as AbortSignal;
+    transport.dispose();
+    expect(firstSignal.aborted).toBe(true);
+    transport.connect(output);
+    await flushPromises();
+    resolveFirst(connectionResponse());
+    await flushPromises();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(sockets).toHaveLength(1);
+    sockets[0].open();
+    transport.connect(output);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    transport.dispose();
+    sockets[0].message("stale output");
+    expect(output).not.toHaveBeenCalled();
+  });
+
+  it("retries a stalled WebSocket handshake after its deadline", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn(async () => connectionResponse());
+    const transport = new VercelTerminalTransport("terminal-one", {
+      fetcher: fetcher as typeof fetch,
+      websocketFactory: () => new FakeSocket() as unknown as WebSocket,
+    });
+    transport.connect(() => undefined);
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(60_500);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    transport.dispose();
+  });
 });
